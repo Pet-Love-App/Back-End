@@ -37,6 +37,7 @@ select = [
 ]
 ignore = [
     "E501", # ignore line too long check
+    "F401"
 ]
 
 # ruff import排序
