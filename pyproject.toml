@@ -1,0 +1,54 @@
+# 项目配置
+[tool.poetry]
+name = "back-end"
+version = "0.1.0"
+description = "Django Backend API"
+authors = ["yuanqh yuanqh23@mails.tsinghua.edu.cn"]
+readme = "README.md"
+packages = [{ include = "back_end" }, { include = "additive" }]
+
+# 生产依赖
+[tool.poetry.dependencies]
+python = "^3.11"
+django = "^5.2.0"
+djangorestframework = "^3.15.0"
+django-cors-headers = "^4.3.0"
+
+# 开发依赖
+# poetry install --only=main只安装生产依赖
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.8.0"
+pytest = "^8.0.0"
+pytest-django = "^4.7.0"
+
+# Ruff 配置
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "W",  # pycodestyle warnings
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
+    "UP", # pyupgrade
+]
+ignore = [
+    "E501", # ignore line too long check
+]
+
+# ruff import排序
+# 标准库 → 第三方库 → 项目内部包
+[tool.ruff.lint.isort]
+known-first-party = ["back_end", "additive"]
+
+# Pytest 配置
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "back_end.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
