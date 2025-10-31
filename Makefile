@@ -1,15 +1,20 @@
-.PHONY: help build up down restart logs deploy update clean
+.PHONY: help build up down restart logs deploy update clean checkout
+
+# 默认分支
+BRANCH ?= feature/additive-databse
 
 help:
 	@echo "可用命令："
-	@echo "  make deploy    - 首次部署（包含 Nginx 配置）"
-	@echo "  make update    - 更新代码并重启"
-	@echo "  make up        - 启动所有服务"
-	@echo "  make down      - 停止所有服务"
-	@echo "  make restart   - 重启服务"
-	@echo "  make logs      - 查看日志"
-	@echo "  make build     - 重新构建镜像"
-	@echo "  make clean     - 清理所有容器和卷（危险）"
+	@echo "  make deploy              - 首次部署（包含 Nginx 配置）"
+	@echo "  make update              - 更新代码并重启（默认分支）"
+	@echo "  make update BRANCH=xxx   - 从指定分支更新"
+	@echo "  make checkout BRANCH=xxx - 切换到指定分支"
+	@echo "  make up                  - 启动所有服务"
+	@echo "  make down                - 停止所有服务"
+	@echo "  make restart             - 重启服务"
+	@echo "  make logs                - 查看日志"
+	@echo "  make build               - 重新构建镜像"
+	@echo "  make clean               - 清理所有容器和卷（危险）"
 
 # 首次部署
 deploy:
@@ -22,16 +27,27 @@ deploy:
 	@echo "✅ 部署完成！"
 	@echo "访问: http://localhost:8000 (开发) 或 http://服务器IP (生产)"
 
+# 切换分支
+checkout:
+	@echo "===== 切换分支到 $(BRANCH) ====="
+	git fetch origin
+	git checkout $(BRANCH)
+	git pull origin $(BRANCH)
+	@echo "✅ 已切换到分支: $(BRANCH)"
+
 # 更新代码
 update:
-	@echo "===== 更新应用 ====="
-	git pull
+	@echo "===== 更新应用（分支: $(BRANCH)）====="
+	@echo "当前分支: $$(git branch --show-current)"
+	git fetch origin
+	git pull origin $(BRANCH)
 	docker-compose restart web
 	@echo "等待服务启动..."
 	@sleep 5
 	docker-compose exec -T web python manage.py migrate
 	docker-compose exec -T web python manage.py collectstatic --noinput
 	@echo "✅ 更新完成！"
+	@echo "当前分支: $$(git branch --show-current)"
 
 # 构建镜像
 build:
