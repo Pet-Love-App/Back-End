@@ -8,18 +8,22 @@ from .models import Additive, Ingredient
 def search_additive(request):
     """
     按名字搜索添加剂
+    支持精确匹配和模糊匹配
     """
     if request.method == "GET":
         query = request.GET.get("name", "").strip()
+        fuzzy = request.GET.get("fuzzy", "false").lower() == "true"  # 是否启用模糊搜索
 
         if not query:
             return JsonResponse({"error": "请提供搜索关键词"}, status=400)
 
+        # 1. 尝试精确匹配
         try:
             additive = Additive.objects.get(Q(name=query) | Q(en_name=query))
             return JsonResponse(
                 {
                     "query": query,
+                    "match_type": "exact",
                     "additive": {
                         "id": additive.id,
                         "name": additive.name,
@@ -31,7 +35,53 @@ def search_additive(request):
                 status=200,
             )
         except Additive.DoesNotExist:
-            return JsonResponse({"error": "目标不在数据库中"}, status=404)
+            # 2. 如果精确匹配失败，尝试模糊匹配
+            additives = Additive.objects.filter(
+                Q(name__icontains=query) | Q(en_name__icontains=query)
+            )
+
+            if additives.exists():
+                # 如果只有一个结果，直接返回
+                if additives.count() == 1:
+                    additive = additives.first()
+                    return JsonResponse(
+                        {
+                            "query": query,
+                            "match_type": "fuzzy_single",
+                            "additive": {
+                                "id": additive.id,
+                                "name": additive.name,
+                                "en_name": additive.en_name,
+                                "applicable_range": additive.applicable_range,
+                                "type": additive.type,
+                            },
+                        },
+                        status=200,
+                    )
+                else:
+                    # 多个结果：返回列表供用户选择
+                    results = [
+                        {
+                            "id": a.id,
+                            "name": a.name,
+                            "en_name": a.en_name,
+                            "applicable_range": a.applicable_range,
+                            "type": a.type,
+                        }
+                        for a in additives[:10]  # 最多返回10个
+                    ]
+                    return JsonResponse(
+                        {
+                            "query": query,
+                            "match_type": "fuzzy_multiple",
+                            "count": additives.count(),
+                            "additives": results,
+                            "message": f"找到 {additives.count()} 个匹配结果",
+                        },
+                        status=200,
+                    )
+            else:
+                return JsonResponse({"error": "目标不在数据库中"}, status=404)
 
     return JsonResponse({"error": "只支持GET请求"}, status=405)
 
@@ -39,6 +89,7 @@ def search_additive(request):
 def search_ingredient(request):
     """
     按名字搜索成分
+    支持精确匹配和模糊匹配
     """
     if request.method == "GET":
         query = request.GET.get("name", "").strip()
@@ -46,11 +97,13 @@ def search_ingredient(request):
         if not query:
             return JsonResponse({"error": "请提供搜索关键词"}, status=400)
 
+        # 1. 尝试精确匹配
         try:
             ingredient = Ingredient.objects.get(Q(name=query) | Q(label=query))
             return JsonResponse(
                 {
                     "query": query,
+                    "match_type": "exact",
                     "ingredient": {
                         "id": ingredient.id,
                         "name": ingredient.name,
@@ -62,7 +115,53 @@ def search_ingredient(request):
                 status=200,
             )
         except Ingredient.DoesNotExist:
-            return JsonResponse({"error": "目标不在数据库中"}, status=404)
+            # 2. 如果精确匹配失败，尝试模糊匹配
+            ingredients = Ingredient.objects.filter(
+                Q(name__icontains=query) | Q(label__icontains=query)
+            )
+
+            if ingredients.exists():
+                # 如果只有一个结果，直接返回
+                if ingredients.count() == 1:
+                    ingredient = ingredients.first()
+                    return JsonResponse(
+                        {
+                            "query": query,
+                            "match_type": "fuzzy_single",
+                            "ingredient": {
+                                "id": ingredient.id,
+                                "name": ingredient.name,
+                                "type": ingredient.type,
+                                "label": ingredient.label,
+                                "desc": ingredient.desc,
+                            },
+                        },
+                        status=200,
+                    )
+                else:
+                    # 多个结果：返回列表供用户选择
+                    results = [
+                        {
+                            "id": i.id,
+                            "name": i.name,
+                            "type": i.type,
+                            "label": i.label,
+                            "desc": i.desc,
+                        }
+                        for i in ingredients[:10]  # 最多返回10个
+                    ]
+                    return JsonResponse(
+                        {
+                            "query": query,
+                            "match_type": "fuzzy_multiple",
+                            "count": ingredients.count(),
+                            "ingredients": results,
+                            "message": f"找到 {ingredients.count()} 个匹配结果",
+                        },
+                        status=200,
+                    )
+            else:
+                return JsonResponse({"error": "目标不在数据库中"}, status=404)
 
     return JsonResponse({"error": "只支持GET请求"}, status=405)
 
