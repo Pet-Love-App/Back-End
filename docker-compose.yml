@@ -1,0 +1,68 @@
+# docker-compose.yml
+version: "3.8"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: backend_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-backend_db}
+      MYSQL_USER: ${DB_USER:-django_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-djangopassword}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql:/docker-entrypoint-initdb.d
+    networks:
+      - backend_network
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+
+  web:
+    build: .
+    container_name: backend_web
+    restart: unless-stopped
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles # 新增：静态文件卷
+      - media_volume:/app/media # 新增：媒体文件卷
+    # 注意：移除 ports 映射，不直接暴露 8000 端口
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_NAME=${DB_NAME:-backend_db}
+      - DB_USER=${DB_USER:-django_user}
+      - DB_PASSWORD=${DB_PASSWORD:-djangopassword}
+      - DJANGO_SETTINGS_MODULE=back_end.settings
+      - PYTHONPATH=/app
+      - DEBUG=${DEBUG:-True}
+    networks:
+      - backend_network
+
+  nginx:
+    image: nginx:alpine
+    container_name: backend_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80" # 对外暴露 80 端口
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    depends_on:
+      - web
+    networks:
+      - backend_network
+
+volumes:
+  mysql_data:
+  static_volume:
+
+networks:
+  backend_network:
+    driver: bridge
