@@ -33,6 +33,7 @@ ALLOWED_HOSTS = ["82.157.255.92", "localhost", "127.0.0.1"]
 
 INSTALLED_APPS = [
     "additive",
+    "corsheaders",  # CORS 支持
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -43,6 +44,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",  # CORS 中间件
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -77,7 +79,7 @@ WSGI_APPLICATION = "back_end.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
-        "NAME": os.environ.get("DB_NAME", "additive"),
+        "NAME": os.environ.get("DB_NAME", "backend_db"),
         "USER": os.environ.get("DB_USER", "book14"),
         "PASSWORD": os.environ.get("DB_PASSWORD", "Pet_love2025!"),
         "HOST": os.environ.get("DB_HOST", "localhost"),
@@ -135,3 +137,11 @@ if not DEBUG:
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# CORS 配置
+CORS_ALLOW_ALL_ORIGINS = True  # 允许所有来源
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:3000",
+#     "http://127.0.0.1:3000",
+#     "http://your-frontend-domain.com",
+# ]

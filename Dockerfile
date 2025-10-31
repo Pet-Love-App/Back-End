@@ -25,21 +25,21 @@ RUN pip install "poetry==$POETRY_VERSION" -i https://pypi.tuna.tsinghua.edu.cn/s
 # 配置Poetry不使用虚拟环境
 RUN poetry config virtualenvs.create false
 
-# 配置 Poetry 使用国内源
-RUN poetry config repositories.tuna https://pypi.tuna.tsinghua.edu.cn/simple/ && \
-    poetry config http-basic.tuna "" ""
-
 # 复制Poetry配置文件
 COPY pyproject.toml poetry.lock* ./
 
-# 安装生产依赖（使用清华源）
-RUN poetry install --only=main --no-interaction --no-ansi
+# 安装生产依赖（使用pip和清华源，避免Poetry网络问题）
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
+    django==5.2.0 \
+    djangorestframework==3.15.0 \
+    django-cors-headers==4.3.0 \
+    mysqlclient==2.1.0
 
 # 复制项目代码
 COPY . .
 
 # 复制并设置入口脚本
-COPY entrypoint.sh /entrypoint.sh
+COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
