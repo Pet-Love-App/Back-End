@@ -23,4 +23,5 @@ urlpatterns = [
     path("additive/", include("additive.urls")),
     path("api/auth/", include("djoser.urls")),
     path("api/auth/", include("djoser.urls.jwt")),
+    path("api/ai/", include("ai_report.urls")),
 ]
