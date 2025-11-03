@@ -14,6 +14,7 @@ help:
 	@echo "  make restart             - 重启服务"
 	@echo "  make logs                - 查看日志"
 	@echo "  make build               - 重新构建镜像"
+	@echo "  make diagnose            - 诊断问题（查看日志和资源）"
 	@echo "  make clean               - 清理所有容器和卷（危险）"
 
 # 首次部署
@@ -21,9 +22,15 @@ deploy:
 	@echo "===== 首次部署 ====="
 	docker-compose down --remove-orphans
 	docker-compose up -d --build
-	@echo "等待服务启动（20秒）..."
-	@sleep 20
-	docker-compose exec -T web python manage.py migrate
+	@echo "等待服务启动..."
+	@echo "检查容器状态..."
+	@for i in 1 2 3 4 5 6; do \
+		sleep 5; \
+		echo "第 $$i 次检查 (共6次)..."; \
+		docker-compose ps | grep "Up" && break || echo "容器还未就绪，继续等待..."; \
+	done
+	@echo "执行数据库迁移..."
+	docker-compose exec -T web python manage.py migrate || (echo "❌ 迁移失败，查看日志：" && docker-compose logs web && exit 1)
 	docker-compose exec -T web python manage.py collectstatic --noinput
 	@echo "✅ 部署完成！"
 	@echo "访问: http://localhost:8000 (开发) 或 http://服务器IP (生产)"
@@ -105,4 +112,18 @@ status:
 	@echo "访问地址："
 	@echo "  开发: http://localhost:8000"
 	@echo "  生产: http://服务器IP"
+
+# 诊断问题
+diagnose:
+	@echo "===== 容器状态 ====="
+	docker-compose ps
+	@echo ""
+	@echo "===== Web 容器日志（最后50行）====="
+	docker-compose logs --tail=50 web
+	@echo ""
+	@echo "===== 数据库容器日志（最后20行）====="
+	docker-compose logs --tail=20 db
+	@echo ""
+	@echo "===== 系统资源 ====="
+	docker stats --no-stream
 
