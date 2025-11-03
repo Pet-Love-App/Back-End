@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "ai_report",
 ]
 
 MIDDLEWARE = [
@@ -76,6 +77,18 @@ WSGI_APPLICATION = "back_end.wsgi.application"
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.mysql",
+#         "NAME": "pet_love",
+#         "USER": "root",
+#         "PASSWORD": "115623yuan",
+#         "HOST": "localhost",
+#         "PORT": "3306",
+#     }
+# }
+
+# 临时使用 sqlite 以便本地开发/调试
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.mysql",
