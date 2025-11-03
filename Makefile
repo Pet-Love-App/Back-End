@@ -31,7 +31,7 @@ deploy:
 checkout:
 	@echo "===== 切换分支到 $(BRANCH) ====="
 	git fetch origin
-	git checkout $(BRANCH)
+	git switch $(BRANCH) 2>/dev/null || git switch -c $(BRANCH) origin/$(BRANCH)
 	git pull origin $(BRANCH)
 	@echo "✅ 已切换到分支: $(BRANCH)"
 
