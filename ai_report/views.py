@@ -105,8 +105,8 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         "根据用户提供的猫粮配料表，只输出一个 JSON 对象。字段名必须用英文，字段内容用中文。\n"
         "严格要求：\n"
         "- 只能输出 JSON 对象本身，禁止出现任何额外文字（包括‘首先’、‘现在’、‘需要’、‘说明’、‘分析’等词句）、禁止重复题目或解释步骤。\n"
-        "- 字段：safety（string，必填，大约50个汉字的针对猫粮的简要安全性分析，重点关注添加剂）；nutrient（string，必填，大约300个汉字的针对猫粮的简要营养分析）；percentage（0/1/null，可选，如果你能分析出以下各成分占比，请在此处填1，否则填0。尽可能分析！）；\n"
-        "  crude_protein、crude_fat、carbohydrates、crude_fiber、crude_ash、others（number，可选，各相应成分百分比）。\n"
+        "- 字段：safety（string，必填，大约50个汉字的针对猫粮的简要安全性分析，重点关注添加剂）；nutrient（string，必填，大约300个汉字的针对猫粮的简要营养分析）；percentage（boolean/null，可选，如果你能分析出以下各成分占比，请在此处填True，否则填False。尽可能分析！）；\n"
+        "  crude_protein、crude_fat、carbohydrates、crude_fiber、crude_ash、others（number，可选，各相应成分百分比。如果能分析占比，percentage=True，需要把每一个比例都填上。没有填0.）。\n"
         "- 数值字段无法判断时返回 null。\n"
         "- 禁止输出推理过程或步骤说明，只保留结论性短句。\n"
     )
@@ -156,7 +156,7 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         result = {
             "safety": "",
             "nutrient": "",
-            "percentage": None,
+            "percentage": False,
             "crude_protein": None,
             "crude_fat": None,
             "carbohydrates": None,
@@ -225,11 +225,11 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
             else parsed.get("has_percentage")
         )
         if isinstance(pct, bool):
-            schema["percentage"] = 1 if pct else 0
+            schema["percentage"] = True if pct else False
         elif isinstance(pct, int | float | str):
             try:
                 iv = int(pct)
-                schema["percentage"] = 1 if iv != 0 else 0
+                schema["percentage"] = True if iv != 0 else False
             except Exception:
                 schema["percentage"] = None
 
