@@ -19,6 +19,9 @@ python-dotenv = "^1.0.0"
 
 # 开发依赖
 # poetry install --only=main只安装生产依赖
+djoser = "^2.3.3"
+djangorestframework-simplejwt = "^5.5.1"
+pydantic = {extras = ["email"], version = "^2.12.3"}
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.8.0"
 pytest = "^8.0.0"
