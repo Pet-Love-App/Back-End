@@ -5,7 +5,7 @@ version = "0.1.0"
 description = "Django Backend API"
 authors = ["yuanqh yuanqh23@mails.tsinghua.edu.cn"]
 readme = "README.md"
-packages = [{ include = "back_end" }, { include = "additive" }]
+packages = [{ include = "back_end" }, { include = "additive" }, { include = "ai_report" }]
 
 # 生产依赖
 [tool.poetry.dependencies]
@@ -16,6 +16,9 @@ django-cors-headers = "^4.3.0"
 
 # 开发依赖
 # poetry install --only=main只安装生产依赖
+requests = "^2.32.5"
+pymysql = "^1.1.2"
+jq = "^1.10.0"
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.8.0"
 pytest = "^8.0.0"
@@ -43,7 +46,7 @@ ignore = [
 # ruff import排序
 # 标准库 → 第三方库 → 项目内部包
 [tool.ruff.lint.isort]
-known-first-party = ["back_end", "additive"]
+known-first-party = ["back_end", "additive", "ai_report"]
 
 # Pytest 配置
 [tool.pytest.ini_options]
