@@ -33,7 +33,10 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
     django==5.2.0 \
     djangorestframework==3.15.0 \
     django-cors-headers==4.3.0 \
-    mysqlclient==2.1.0
+    mysqlclient==2.1.0 \
+    djangorestframework-simplejwt==5.3.0 \
+    djoser==2.2.0 \
+    pydantic==2.5.0
 
 # 复制项目代码
 COPY . .

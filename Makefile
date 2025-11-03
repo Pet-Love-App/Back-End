@@ -19,9 +19,10 @@ help:
 # 首次部署
 deploy:
 	@echo "===== 首次部署 ====="
+	docker-compose down --remove-orphans
 	docker-compose up -d --build
-	@echo "等待服务启动..."
-	@sleep 10
+	@echo "等待服务启动（20秒）..."
+	@sleep 20
 	docker-compose exec -T web python manage.py migrate
 	docker-compose exec -T web python manage.py collectstatic --noinput
 	@echo "✅ 部署完成！"
