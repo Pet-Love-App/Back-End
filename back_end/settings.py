@@ -148,6 +148,10 @@ DATABASES = {
         "PASSWORD": os.environ.get("DB_PASSWORD", "Pet_love2025!"),
         "HOST": os.environ.get("DB_HOST", "localhost"),
         "PORT": os.environ.get("DB_PORT", "3306"),
+        "OPTIONS": {
+            "charset": "utf8mb4",
+            "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+        },
     }
 }
 

@@ -20,20 +20,24 @@ help:
 # 首次部署
 deploy:
 	@echo "===== 首次部署 ====="
-	docker-compose down --remove-orphans
+	@echo "停止并清理旧容器..."
+	docker-compose down --remove-orphans -v
+	@echo "重新构建并启动..."
 	docker-compose up -d --build
-	@echo "等待服务启动..."
+	@echo "等待数据库完全启动（15秒）..."
+	@sleep 15
 	@echo "检查容器状态..."
-	@for i in 1 2 3 4 5 6; do \
-		sleep 5; \
-		echo "第 $$i 次检查 (共6次)..."; \
-		docker-compose ps | grep "Up" && break || echo "容器还未就绪，继续等待..."; \
-	done
+	@docker-compose ps
+	@echo ""
 	@echo "执行数据库迁移..."
-	docker-compose exec -T web python manage.py migrate || (echo "❌ 迁移失败，查看日志：" && docker-compose logs web && exit 1)
+	docker-compose exec -T web python manage.py migrate || (echo "❌ 迁移失败，查看日志：" && docker-compose logs --tail=100 web && exit 1)
 	docker-compose exec -T web python manage.py collectstatic --noinput
 	@echo "✅ 部署完成！"
-	@echo "访问: http://localhost:8000 (开发) 或 http://服务器IP (生产)"
+	@docker-compose ps
+	@echo ""
+	@echo "访问地址："
+	@echo "  http://localhost:8000 (开发)"
+	@echo "  http://服务器IP (生产)"
 
 # 切换分支
 checkout:
