@@ -1,0 +1,73 @@
+# docker-compose.yml
+version: "3.8"
+
+services:
+  db:
+    image: mysql:8.0
+    container_name: backend_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-backend_db}
+      MYSQL_USER: ${DB_USER:-django_user}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-djangopassword}
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./sql:/docker-entrypoint-initdb.d
+    networks:
+      - backend_network
+    command:
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --character-set-client-handshake=FALSE
+      - --init-connect='SET NAMES utf8mb4'
+
+  web:
+    build: .
+    container_name: backend_web
+    restart: always
+    command: python manage.py runserver 0.0.0.0:8000
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
+    ports:
+      - "8000:8000" # 暴露给系统 Nginx
+    depends_on:
+      - db
+    environment:
+      - DB_HOST=db
+      - DB_NAME=${DB_NAME:-backend_db}
+      - DB_USER=${DB_USER:-django_user}
+      - DB_PASSWORD=${DB_PASSWORD:-djangopassword}
+      - DJANGO_SETTINGS_MODULE=back_end.settings
+      - PYTHONPATH=/app
+      - DEBUG=${DEBUG:-True}
+    networks:
+      - backend_network
+
+  # 不再使用 Docker 的 Nginx，改用系统 Nginx
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: backend_nginx
+  #   restart: unless-stopped
+  #   ports:
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/conf.d/default.conf
+  #     - static_volume:/app/staticfiles
+  #     - media_volume:/app/media
+  #   depends_on:
+  #     - web
+  #   networks:
+  #     - backend_network
+
+volumes:
+  mysql_data:
+  static_volume:
+  media_volume:
+
+networks:
+  backend_network:
+    driver: bridge
