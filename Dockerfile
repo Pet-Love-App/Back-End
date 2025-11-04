@@ -17,6 +17,8 @@ RUN apt-get update && apt-get install -y \
     pkg-config \
     curl \
     netcat-openbsd \
+    libjpeg-dev \
+    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装Poetry（使用清华源）
@@ -34,9 +36,13 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
     djangorestframework==3.15.0 \
     django-cors-headers==4.3.0 \
     mysqlclient==2.1.0 \
-    djangorestframework-simplejwt==5.3.0 \
-    djoser==2.2.0 \
-    pydantic==2.5.0
+    djangorestframework-simplejwt==5.5.1 \
+    djoser==2.3.3 \
+    pydantic==2.12.3 \
+    pillow==10.4.0 \
+    python-dotenv==1.0.0 \
+    gunicorn==21.2.0 \
+    requests==2.32.5
 
 # 复制项目代码
 COPY . .
