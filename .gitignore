@@ -149,3 +149,8 @@ logs/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Node.js (不需要，但以防万一)
+node_modules/
+package-lock.json
+yarn.lock
