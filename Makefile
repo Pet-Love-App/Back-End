@@ -53,9 +53,10 @@ update:
 	@echo "当前分支: $$(git branch --show-current)"
 	git fetch origin
 	git pull origin $(BRANCH)
-	docker-compose restart web
+	@echo "重新构建镜像..."
+	docker-compose up -d --build
 	@echo "等待服务启动..."
-	@sleep 5
+	@sleep 10
 	docker-compose exec -T web python manage.py migrate
 	docker-compose exec -T web python manage.py collectstatic --noinput
 	@echo "✅ 更新完成！"
