@@ -48,10 +48,9 @@ class CustomUserCreateSerializer(PydanticValidationMixin, serializers.ModelSeria
 
     class Meta:
         model = User
-        fields = ["id", "username", "password", "re_password", "email"]
+        fields = ["id", "username", "password", "re_password"]
         extra_kwargs = {
             "password": {"write_only": True},
-            "email": {"required": False},
         }
 
     def create(self, validated_data):

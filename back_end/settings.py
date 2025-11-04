@@ -40,6 +40,8 @@ ALLOWED_HOSTS = ["82.157.255.92", "localhost", "127.0.0.1"]
 INSTALLED_APPS = [
     # 自建应用
     "additive",
+    "user",  # 用户管理（头像、宠物）
+    "ai_report",
     "corsheaders",  # CORS 支持
     "django.contrib.admin",
     "django.contrib.auth",
@@ -52,7 +54,6 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "djoser",
-    "ai_report",
 ]
 
 MIDDLEWARE = [
@@ -208,6 +209,15 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+
+# Media files (用户上传的文件)
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+# 文件上传限制
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
+
 # 生产环境安全设置
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "False") == "True"
