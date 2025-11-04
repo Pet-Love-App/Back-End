@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 
@@ -105,10 +106,15 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         "根据用户提供的猫粮配料表，只输出一个 JSON 对象。字段名必须用英文，字段内容用中文。\n"
         "严格要求：\n"
         "- 只能输出 JSON 对象本身，禁止出现任何额外文字（包括‘首先’、‘现在’、‘需要’、‘说明’、‘分析’等词句）、禁止重复题目或解释步骤。\n"
-        "- 字段：safety（string，必填，大约50个汉字的针对猫粮的简要安全性分析，重点关注添加剂）；nutrient（string，必填，大约300个汉字的针对猫粮的简要营养分析）；percentage（boolean/null，可选，如果你能分析出以下各成分占比，请在此处填True，否则填False。尽可能分析！）；\n"
-        "  crude_protein、crude_fat、carbohydrates、crude_fiber、crude_ash、others（number，可选，各相应成分百分比。如果能分析占比，percentage=True，需要把每一个比例都填上。没有填0.）。\n"
-        "- 数值字段无法判断时返回 null。\n"
-        "- 禁止输出推理过程或步骤说明，只保留结论性短句。\n"
+        "- 字段说明（英文字段名，内容中文）：\n"
+        "  - additives（array，可选，识别到的添加剂名称列表，元素为字符串）。\n"
+        "  - identified_nutrients（array，可选，识别到的营养成分或营养标签的名称列表，元素为字符串）。\n"
+        "  - safety（string，必填，大约50个汉字的针对猫粮的简要安全性分析，重点关注添加剂）；\n"
+        "  - nutrient（string，必填，大约300个汉字的针对猫粮的简要营养分析）；\n"
+        "  - percentage（boolean/null，可选，如果你能分析出以下各成分占比，请在此处填True，否则填False。尽可能分析！）；\n"
+        "  - crude_protein、crude_fat、carbohydrates、crude_fiber、crude_ash、others（number，可选，各相应成分百分比。如果能分析占比，percentage=True，需要把每一个比例都填上。没有填0.）。\n"
+        "- 数值字段无法判断时返回 null；数组字段无法判断或无识别结果时返回空数组。\n"
+        "- 禁止输出推理过程或步骤说明，只保留结论性短句或最终的 JSON 字段内容。\n"
     )
 
     messages.append({"role": "system", "content": system_instruction})
@@ -154,6 +160,8 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
     if status >= 400 or data is None:
         # Return the minimal schema with empty/nulls (no extra debug fields)
         result = {
+            "additives": [],
+            "identified_nutrients": [],
             "safety": "",
             "nutrient": "",
             "percentage": False,
@@ -204,7 +212,46 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         except Exception:
             return None
 
+
+    def _to_str_list(v):
+        """Coerce various shapes into a list of stripped strings.
+
+        Rules:
+        - None -> []
+        - list -> map str() and strip
+        - str -> try to json.loads (if it's a JSON list), otherwise split on common separators and newlines
+        - other types -> single-element list with str()
+        """
+        if v is None:
+            return []
+        if isinstance(v, list):
+            out = []
+            for x in v:
+                if x is None:
+                    continue
+                s = str(x).strip()
+                if s:
+                    out.append(s)
+            return out
+        if isinstance(v, str):
+            # try JSON list
+            try:
+                loaded = json.loads(v)
+                if isinstance(loaded, list):
+                    return [str(x).strip() for x in loaded if x is not None and str(x).strip()]
+            except Exception:
+                pass
+            # split on common delimiters
+            parts = [p.strip() for p in re.split(r"[;,，、\n]", v) if p.strip()]
+            if parts:
+                return parts
+            return [v.strip()]
+        # fallback
+        return [str(v).strip()]
+
     schema = {
+        "additives": [],
+        "identified_nutrients": [],
         "safety": "",
         "nutrient": "",
         "percentage": None,
@@ -217,6 +264,22 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
     }
 
     if isinstance(parsed, dict):
+        # additives and identified nutrient names
+        raw_add = (
+            parsed.get("additives")
+            or parsed.get("identified_additives")
+            or parsed.get("additive_list")
+            or parsed.get("additives_list")
+        )
+        schema["additives"] = _to_str_list(raw_add)
+
+        raw_id_nut = (
+            parsed.get("identified_nutrients")
+            or parsed.get("nutrients")
+            or parsed.get("identified_nutrition")
+            or parsed.get("nutrition_components")
+        )
+        schema["identified_nutrients"] = _to_str_list(raw_id_nut)
         schema["safety"] = str(parsed.get("safety") or parsed.get("safety_analysis") or "")
         schema["nutrient"] = str(parsed.get("nutrient") or parsed.get("nutrition") or "")
         pct = (
