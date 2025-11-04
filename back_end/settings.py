@@ -17,10 +17,13 @@ from pathlib import Path
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# 加载 .env 文件
-from dotenv import load_dotenv
+# 加载 .env 文件（如果存在）
+try:
+    from dotenv import load_dotenv
 
-load_dotenv(BASE_DIR / ".env")
+    load_dotenv(BASE_DIR / ".env")
+except ImportError:
+    pass  # 如果没有安装 python-dotenv，跳过
 
 
 # Quick-start development settings - unsuitable for production
