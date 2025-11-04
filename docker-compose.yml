@@ -27,8 +27,8 @@ services:
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
-      - static_volume:/app/staticfiles
-      - media_volume:/app/media
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
     ports:
       - "8000:8000" # 暴露给系统 Nginx
     depends_on:
@@ -62,8 +62,6 @@ services:
 
 volumes:
   mysql_data:
-  static_volume:
-  media_volume:
 
 networks:
   backend_network:
