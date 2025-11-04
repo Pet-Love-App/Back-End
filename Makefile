@@ -14,24 +14,36 @@ help:
 	@echo "  make restart             - 重启服务"
 	@echo "  make logs                - 查看日志"
 	@echo "  make build               - 重新构建镜像"
+	@echo "  make diagnose            - 诊断问题（查看日志和资源）"
 	@echo "  make clean               - 清理所有容器和卷（危险）"
 
 # 首次部署
 deploy:
 	@echo "===== 首次部署 ====="
+	@echo "停止并清理旧容器..."
+	docker-compose down --remove-orphans -v
+	@echo "重新构建并启动..."
 	docker-compose up -d --build
-	@echo "等待服务启动..."
-	@sleep 10
-	docker-compose exec -T web python manage.py migrate
+	@echo "等待数据库完全启动（15秒）..."
+	@sleep 15
+	@echo "检查容器状态..."
+	@docker-compose ps
+	@echo ""
+	@echo "执行数据库迁移..."
+	docker-compose exec -T web python manage.py migrate || (echo "❌ 迁移失败，查看日志：" && docker-compose logs --tail=100 web && exit 1)
 	docker-compose exec -T web python manage.py collectstatic --noinput
 	@echo "✅ 部署完成！"
-	@echo "访问: http://localhost:8000 (开发) 或 http://服务器IP (生产)"
+	@docker-compose ps
+	@echo ""
+	@echo "访问地址："
+	@echo "  http://localhost:8000 (开发)"
+	@echo "  http://服务器IP (生产)"
 
 # 切换分支
 checkout:
 	@echo "===== 切换分支到 $(BRANCH) ====="
 	git fetch origin
-	git checkout $(BRANCH)
+	git switch $(BRANCH) 2>/dev/null || git switch -c $(BRANCH) origin/$(BRANCH)
 	git pull origin $(BRANCH)
 	@echo "✅ 已切换到分支: $(BRANCH)"
 
@@ -104,4 +116,18 @@ status:
 	@echo "访问地址："
 	@echo "  开发: http://localhost:8000"
 	@echo "  生产: http://服务器IP"
+
+# 诊断问题
+diagnose:
+	@echo "===== 容器状态 ====="
+	docker-compose ps
+	@echo ""
+	@echo "===== Web 容器日志（最后50行）====="
+	docker-compose logs --tail=50 web
+	@echo ""
+	@echo "===== 数据库容器日志（最后20行）====="
+	docker-compose logs --tail=20 db
+	@echo ""
+	@echo "===== 系统资源 ====="
+	docker stats --no-stream
 
