@@ -3,6 +3,7 @@ import os
 import re
 import urllib.error
 import urllib.request
+import urllib.parse
 
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -45,6 +46,132 @@ def _post_json(url: str, data: dict, headers: dict, timeout: int = 120) -> tuple
         return e.code, e.read().decode("utf-8", errors="replace")
     except Exception as e:  # pragma: no cover
         return 0, str(e)
+
+
+def _fetch_wikipedia_summary(title: str, lang: str = "zh", timeout: int = 10) -> tuple[int, object]:
+    """Fetch a concise page summary from Wikipedia REST API.
+
+    Returns (status_code, data) where data is a dict parsed from JSON on success,
+    or a string error message on network failure.
+    """
+    safe_title = urllib.parse.quote(title.strip())
+    url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{safe_title}"
+    headers = {"Accept": "application/json", "User-Agent": "pet_love/1.0"}
+
+    if requests is not None:
+        try:
+            resp = requests.get(url, headers=headers, timeout=timeout)
+            try:
+                return resp.status_code, resp.json()
+            except Exception:
+                return resp.status_code, resp.text
+        except Exception as e:  # pragma: no cover
+            return 0, str(e)
+
+    req = urllib.request.Request(url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # nosec B310
+            status = resp.status
+            text = resp.read().decode("utf-8", errors="replace")
+            try:
+                return status, json.loads(text)
+            except Exception:
+                return status, text
+    except urllib.error.HTTPError as e:  # pragma: no cover
+        return e.code, e.read().decode("utf-8", errors="replace")
+    except Exception as e:  # pragma: no cover
+        return 0, str(e)
+
+
+def _to_simplified(text: str) -> str:
+    """Convert Chinese text to Simplified Chinese if a converter is available.
+
+    Tries the following libraries in order: opencc, zhconv, hanziconv. If none are
+    available the original text is returned unchanged. This keeps the change
+    optional and avoids adding a hard dependency.
+    """
+    if not text:
+        return text
+    # opencc (fast, reliable) - pip package name: opencc
+    try:
+        from opencc import OpenCC
+
+        cc = OpenCC("t2s")
+        return cc.convert(text)
+    except Exception:
+        pass
+
+    # zhconv - pip package name: zhconv
+    try:
+        import zhconv
+
+        return zhconv.convert(text, "zh-cn")
+    except Exception:
+        pass
+
+    # hanziconv - pip package name: hanziconv
+    try:
+        from hanziconv import HanziConv
+
+        return HanziConv.toSimplified(text)
+    except Exception:
+        pass
+
+    return text
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def ingredient_info(request: HttpRequest) -> JsonResponse:
+    """Return a short Wikipedia summary for a given ingredient name.
+
+    GET params: q (ingredient name), lang (optional, default 'zh')
+    POST JSON: {"ingredient": "维生素D", "lang": "zh"}
+
+    Response JSON: { ok: bool, title, extract, url, lang }
+    """
+    if request.method == "GET":
+        q = (request.GET.get("q") or "").strip()
+        lang = (request.GET.get("lang") or "zh").strip()
+    else:
+        try:
+            payload = json.loads(request.body.decode("utf-8") or "{}")
+        except json.JSONDecodeError:
+            return JsonResponse({"ok": False, "error": {"code": "bad_json", "message": "Invalid JSON"}}, status=400, json_dumps_params={"ensure_ascii": False})
+        q = (payload.get("ingredient") or payload.get("q") or "").strip()
+        lang = (payload.get("lang") or "zh").strip()
+
+    if not q:
+        return JsonResponse({"ok": False, "error": {"code": "missing_ingredient", "message": "Provide 'q' or 'ingredient'"}}, status=400, json_dumps_params={"ensure_ascii": False})
+
+    status, data = _fetch_wikipedia_summary(q, lang=lang)
+    if status == 0:
+        return JsonResponse({"ok": False, "error": {"code": "network", "message": "request failed", "detail": data}}, status=502, json_dumps_params={"ensure_ascii": False})
+
+    if isinstance(data, dict):
+        title = data.get("title") or q
+        extract = data.get("extract") or data.get("description") or ""
+        # Prefer returning Simplified Chinese when possible
+        try:
+            title = _to_simplified(title)
+        except Exception:
+            pass
+        try:
+            extract = _to_simplified(extract)
+        except Exception:
+            pass
+        page_url = None
+        cu = data.get("content_urls") or {}
+        if isinstance(cu, dict):
+            desktop = cu.get("desktop") or {}
+            if isinstance(desktop, dict):
+                page_url = desktop.get("page")
+        if not page_url:
+            page_url = f"https://{lang}.wikipedia.org/wiki/{urllib.parse.quote(title)}"
+
+        return JsonResponse({"ok": True, "title": title, "extract": extract, "url": page_url, "lang": lang}, status=200, json_dumps_params={"ensure_ascii": False})
+
+    return JsonResponse({"ok": False, "error": {"code": "invalid_response", "detail": str(data)}}, status=502, json_dumps_params={"ensure_ascii": False})
 
 
 @csrf_exempt
