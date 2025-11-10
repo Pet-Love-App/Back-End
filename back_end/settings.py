@@ -41,6 +41,9 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "ai_report",
+    'ocr.apps.OcrConfig', # OCR 应用
+
+
 ]
 
 MIDDLEWARE = [
@@ -88,18 +91,24 @@ WSGI_APPLICATION = "back_end.wsgi.application"
 #     }
 # }
 
-# 临时使用 sqlite 以便本地开发/调试
+# # 临时使用 sqlite 以便本地开发/调试
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.mysql",
+#         "NAME": os.environ.get("DB_NAME", "backend_db"),
+#         "USER": os.environ.get("DB_USER", "book14"),
+#         "PASSWORD": os.environ.get("DB_PASSWORD", "Pet_love2025!"),
+#         "HOST": os.environ.get("DB_HOST", "localhost"),
+#         "PORT": os.environ.get("DB_PORT", "3306"),
+#     }
+# }
+# settings.py 临时替换为SQLite
 DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.mysql",
-        "NAME": os.environ.get("DB_NAME", "backend_db"),
-        "USER": os.environ.get("DB_USER", "book14"),
-        "PASSWORD": os.environ.get("DB_PASSWORD", "Pet_love2025!"),
-        "HOST": os.environ.get("DB_HOST", "localhost"),
-        "PORT": os.environ.get("DB_PORT", "3306"),
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators

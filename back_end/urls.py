@@ -22,4 +22,6 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("additive", include("additive.urls")),
     path("api/ai/", include("ai_report.urls")),
+    path('ocr/', include('ocr.urls')),  # 关键：将ocr应用的urls包含进来
+
 ]
