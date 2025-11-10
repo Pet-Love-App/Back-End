@@ -1,4 +1,4 @@
-.PHONY: help build up down restart logs deploy update clean checkout
+.PHONY: help build up down restart logs deploy update clean checkout wait-db
 
 # 默认分支
 BRANCH ?= back_end
@@ -14,7 +14,9 @@ help:
 	@echo "  make restart             - 重启服务"
 	@echo "  make logs                - 查看日志"
 	@echo "  make build               - 重新构建镜像"
+	@echo "  make wait-db             - 等待数据库就绪"
 	@echo "  make diagnose            - 诊断问题（查看日志和资源）"
+	@echo "  make migrate             - 执行数据库迁移"
 	@echo "  make clean               - 清理所有容器和卷（危险）"
 
 # 首次部署
@@ -24,13 +26,17 @@ deploy:
 	docker-compose down --remove-orphans -v
 	@echo "重新构建并启动..."
 	docker-compose up -d --build
-	@echo "等待数据库完全启动（15秒）..."
-	@sleep 15
+	@echo "等待数据库完全启动（30秒）..."
+	@sleep 30
 	@echo "检查容器状态..."
 	@docker-compose ps
 	@echo ""
-	@echo "执行数据库迁移..."
-	docker-compose exec -T web python manage.py migrate || (echo "❌ 迁移失败，查看日志：" && docker-compose logs --tail=100 web && exit 1)
+	@echo "执行数据库迁移（重试3次）..."
+	@for i in 1 2 3; do \
+		echo "尝试迁移（第$$i次）..."; \
+		docker-compose exec -T web python manage.py migrate && break || \
+		(echo "⏳ 等待10秒后重试..." && sleep 10); \
+	done
 	docker-compose exec -T web python manage.py collectstatic --noinput
 	@echo "✅ 部署完成！"
 	@docker-compose ps
@@ -55,9 +61,13 @@ update:
 	git pull origin $(BRANCH)
 	@echo "重新构建镜像..."
 	docker-compose up -d --build
-	@echo "等待服务启动..."
-	@sleep 10
-	docker-compose exec -T web python manage.py migrate
+	@echo "等待服务启动（20秒）..."
+	@sleep 20
+	@echo "执行数据库迁移..."
+	@for i in 1 2 3; do \
+		docker-compose exec -T web python manage.py migrate && break || \
+		(echo "⏳ 等待5秒后重试..." && sleep 5); \
+	done
 	docker-compose exec -T web python manage.py collectstatic --noinput
 	@echo "✅ 更新完成！"
 	@echo "当前分支: $$(git branch --show-current)"
@@ -117,6 +127,16 @@ status:
 	@echo "访问地址："
 	@echo "  开发: http://localhost:8000"
 	@echo "  生产: http://服务器IP"
+
+# 等待数据库就绪
+wait-db:
+	@echo "⏳ 等待数据库就绪..."
+	@for i in $$(seq 1 60); do \
+		docker-compose exec -T db mysqladmin ping -h localhost -u root -p$${DB_ROOT_PASSWORD:-rootpassword} 2>/dev/null && \
+		echo "✅ 数据库已就绪！" && exit 0 || \
+		(echo "等待中... ($$i/60)" && sleep 1); \
+	done; \
+	echo "❌ 数据库启动超时" && exit 1
 
 # 诊断问题
 diagnose:
