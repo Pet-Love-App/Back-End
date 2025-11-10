@@ -170,13 +170,24 @@ def search_ingredient(request):
 def add_ingredient(request):
     """
     添加新成分
+    支持 JSON 和 form-data 两种格式
     """
     if request.method == "POST":
-        # 从POST请求体中获取数据
-        name = request.POST.get("name", "").strip()
-        ingredient_type = request.POST.get("type", "").strip()
-        label = request.POST.get("label", "").strip()
-        desc = request.POST.get("desc", "").strip()
+        # 尝试解析 JSON，如果失败则使用 form-data
+        import json
+
+        try:
+            data = json.loads(request.body)
+            name = data.get("name", "").strip()
+            ingredient_type = data.get("type", "").strip()
+            label = data.get("label", "").strip()
+            desc = data.get("desc", "").strip()
+        except (json.JSONDecodeError, ValueError):
+            # 回退到 form-data
+            name = request.POST.get("name", "").strip()
+            ingredient_type = request.POST.get("type", "").strip()
+            label = request.POST.get("label", "").strip()
+            desc = request.POST.get("desc", "").strip()
 
         if not name:
             return JsonResponse({"error": "请提供成分名称"}, status=400)
@@ -213,13 +224,24 @@ def add_ingredient(request):
 def add_additive(request):
     """
     添加新添加剂
+    支持 JSON 和 form-data 两种格式
     """
     if request.method == "POST":
-        # 从POST请求体中获取数据
-        name = request.POST.get("name", "").strip()
-        en_name = request.POST.get("en_name", "").strip()
-        applicable_range = request.POST.get("applicable_range", "").strip()
-        additive_type = request.POST.get("type", "").strip()
+        # 尝试解析 JSON，如果失败则使用 form-data
+        import json
+
+        try:
+            data = json.loads(request.body)
+            name = data.get("name", "").strip()
+            en_name = data.get("en_name", "").strip()
+            applicable_range = data.get("applicable_range", "").strip()
+            additive_type = data.get("type", "").strip()
+        except (json.JSONDecodeError, ValueError):
+            # 回退到 form-data
+            name = request.POST.get("name", "").strip()
+            en_name = request.POST.get("en_name", "").strip()
+            applicable_range = request.POST.get("applicable_range", "").strip()
+            additive_type = request.POST.get("type", "").strip()
 
         if not name:
             return JsonResponse({"error": "请提供添加剂名称"}, status=400)
