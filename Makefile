@@ -1,7 +1,7 @@
 .PHONY: help build up down restart logs deploy update clean checkout
 
 # 默认分支
-BRANCH ?= back_end
+BRANCH ?= main
 
 help:
 	@echo "可用命令："
