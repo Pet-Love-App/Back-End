@@ -75,6 +75,7 @@ class CatFoodSerializer(serializers.ModelSerializer):
     imageUrl = serializers.URLField(
         source="image_url", required=False, allow_null=True, allow_blank=True
     )
+    score = serializers.FloatField(read_only=True)
 
     class Meta:
         model = CatFood
