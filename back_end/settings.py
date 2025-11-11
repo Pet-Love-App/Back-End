@@ -45,6 +45,8 @@ INSTALLED_APPS = [
     "additive",
     "user",  # 用户管理（头像、宠物）
     "ai_report",
+    "catfood",  # 猫粮管理
+    "comment",  # 评论系统
     "corsheaders",  # CORS 支持
     "django.contrib.admin",
     "django.contrib.auth",

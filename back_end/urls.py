@@ -30,6 +30,10 @@ urlpatterns = [
     path("api/user/", include("user.urls")),
     # AI 报告
     path("api/ai/", include("ai_report.urls")),
+    # 猫粮管理
+    path("api/catfood/", include("catfood.urls")),
+    # 评论系统
+    path("api/comments/", include("comment.urls")),
 ]
 
 # 开发环境提供 media 文件访问
