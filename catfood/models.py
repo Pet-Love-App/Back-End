@@ -89,6 +89,7 @@ class CatFood(models.Model):
         verbose_name = "猫粮"
         verbose_name_plural = "猫粮"
         ordering = ["-score", "-created_at"]
+        unique_together = [["brand", "name"]]  # 品牌+名称组合唯一
         indexes = [
             models.Index(fields=["name"]),
             models.Index(fields=["brand"]),

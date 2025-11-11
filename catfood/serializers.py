@@ -160,6 +160,18 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ["id"]
 
+    def validate(self, data):
+        """验证数据"""
+        # 检查品牌+名称是否已存在（创建时）
+        if not self.instance:  # 仅在创建时检查
+            name = data.get("name")
+            brand = data.get("brand", "")
+            if CatFood.objects.filter(name=name, brand=brand).exists():
+                raise serializers.ValidationError(
+                    {"name": f'品牌"{brand}"的猫粮"{name}"已存在，不能重复添加'}
+                )
+        return data
+
     def create(self, validated_data):
         """创建猫粮"""
         tags = validated_data.pop("tags", [])
