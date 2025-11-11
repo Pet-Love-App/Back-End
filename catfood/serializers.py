@@ -71,6 +71,10 @@ class CatFoodSerializer(serializers.ModelSerializer):
     nutrition = serializers.SerializerMethodField()
     additive = serializers.SerializerMethodField()
     percentData = serializers.SerializerMethodField()
+    countNum = serializers.IntegerField(source="count_num", read_only=True)
+    imageUrl = serializers.URLField(
+        source="image_url", required=False, allow_null=True, allow_blank=True
+    )
 
     class Meta:
         model = CatFood
@@ -120,16 +124,6 @@ class CatFoodSerializer(serializers.ModelSerializer):
             "others": obj.others,
         }
 
-    # 适配前端字段名（驼峰命名）
-    def to_representation(self, instance):
-        ret = super().to_representation(instance)
-        # 将 snake_case 字段映射为 camelCase
-        if "countNum" not in ret and "count_num" in ret:
-            ret["countNum"] = ret.pop("count_num", 0)
-        if "imageUrl" not in ret and "image_url" in ret:
-            ret["imageUrl"] = ret.pop("image_url", None)
-        return ret
-
 
 class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
     """
@@ -144,6 +138,9 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
         child=serializers.IntegerField(), required=False, allow_empty=True
     )
     percentData = PercentDataSerializer(required=False)
+    imageUrl = serializers.URLField(
+        source="image_url", required=False, allow_null=True, allow_blank=True
+    )
 
     class Meta:
         model = CatFood
@@ -152,7 +149,7 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
             "name",
             "brand",
             "desc",
-            "image_url",
+            "imageUrl",
             "tags",
             "nutrition",
             "additive",
