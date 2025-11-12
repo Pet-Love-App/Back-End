@@ -61,9 +61,9 @@ class CommentSerializer(serializers.ModelSerializer):
 class CommentCreateSerializer(serializers.ModelSerializer):
     """创建评论序列化器"""
 
-    targetId = serializers.IntegerField(source="target_id")
+    targetId = serializers.IntegerField(source="target_id", required=True)
     targetType = serializers.ChoiceField(
-        source="target_type", choices=["post", "catfood", "report"]
+        source="target_type", choices=["post", "catfood", "report"], required=True
     )
 
     class Meta:
@@ -100,6 +100,14 @@ class CommentCreateSerializer(serializers.ModelSerializer):
         request = self.context.get("request")
         validated_data["author"] = request.user
         return super().create(validated_data)
+
+
+class CommentUpdateSerializer(serializers.ModelSerializer):
+    """更新评论序列化器（只能更新内容）"""
+
+    class Meta:
+        model = Comment
+        fields = ["content"]
 
 
 class CommentLikeSerializer(serializers.Serializer):

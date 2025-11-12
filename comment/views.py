@@ -8,7 +8,12 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.response import Response
 
 from .models import Comment
-from .serializers import CommentCreateSerializer, CommentLikeSerializer, CommentSerializer
+from .serializers import (
+    CommentCreateSerializer,
+    CommentLikeSerializer,
+    CommentSerializer,
+    CommentUpdateSerializer,
+)
 
 
 class CommentViewSet(viewsets.ModelViewSet):
@@ -25,6 +30,8 @@ class CommentViewSet(viewsets.ModelViewSet):
         """根据操作类型返回不同的序列化器"""
         if self.action == "create":
             return CommentCreateSerializer
+        elif self.action in ["update", "partial_update"]:
+            return CommentUpdateSerializer
         return CommentSerializer
 
     def get_permissions(self):
