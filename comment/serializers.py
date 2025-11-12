@@ -70,6 +70,31 @@ class CommentCreateSerializer(serializers.ModelSerializer):
         model = Comment
         fields = ["content", "targetId", "targetType"]
 
+    def validate(self, data):
+        """验证目标对象是否存在"""
+        target_type = data.get("target_type")
+        target_id = data.get("target_id")
+
+        # 根据不同的目标类型验证对象是否存在
+        if target_type == "catfood":
+            from catfood.models import CatFood
+
+            if not CatFood.objects.filter(id=target_id).exists():
+                raise serializers.ValidationError({"targetId": f"ID为{target_id}的猫粮不存在"})
+        elif target_type == "post":
+            # 如果有 post 模型，添加验证
+            # from post.models import Post
+            # if not Post.objects.filter(id=target_id).exists():
+            #     raise serializers.ValidationError({"targetId": f"ID为{target_id}的帖子不存在"})
+            pass
+        elif target_type == "report":
+            from ai_report.models import Report
+
+            if not Report.objects.filter(id=target_id).exists():
+                raise serializers.ValidationError({"targetId": f"ID为{target_id}的报告不存在"})
+
+        return data
+
     def create(self, validated_data):
         """创建评论，自动设置作者为当前用户"""
         request = self.context.get("request")
