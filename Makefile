@@ -5,18 +5,34 @@ BRANCH ?= back_end
 
 help:
 	@echo "可用命令："
+	@echo ""
+	@echo "🚀 部署相关："
 	@echo "  make deploy              - 首次部署（包含 Nginx 配置）"
 	@echo "  make update              - 更新代码并重启（默认分支）"
 	@echo "  make update BRANCH=xxx   - 从指定分支更新"
 	@echo "  make checkout BRANCH=xxx - 切换到指定分支"
+	@echo ""
+	@echo "🐳 Docker 操作："
 	@echo "  make up                  - 启动所有服务"
 	@echo "  make down                - 停止所有服务"
 	@echo "  make restart             - 重启服务"
 	@echo "  make logs                - 查看日志"
 	@echo "  make build               - 重新构建镜像"
+	@echo "  make status              - 查看服务状态"
+	@echo ""
+	@echo "🗄️  数据库操作："
+	@echo "  make migrate             - 执行数据库迁移"
+	@echo "  make makemigrations      - 创建迁移文件"
+	@echo "  make showmigrations      - 查看迁移状态"
+	@echo "  make dbshell             - 进入数据库 shell"
+	@echo "  make show-tables         - 查看所有表"
+	@echo ""
+	@echo "🔧 工具命令："
 	@echo "  make wait-db             - 等待数据库就绪"
 	@echo "  make diagnose            - 诊断问题（查看日志和资源）"
-	@echo "  make migrate             - 执行数据库迁移"
+	@echo "  make shell               - 进入 web 容器"
+	@echo "  make djshell             - 进入 Django shell"
+	@echo "  make createsuperuser     - 创建超级用户"
 	@echo "  make clean               - 清理所有容器和卷（危险）"
 
 # 首次部署
@@ -119,6 +135,22 @@ shell:
 # Django shell
 djshell:
 	docker-compose exec web python manage.py shell
+
+# 数据库 shell
+dbshell:
+	docker-compose exec db mysql -u root -prootpassword backend_db
+
+# 查看数据库表
+show-tables:
+	docker-compose exec db mysql -u root -prootpassword backend_db -e "SHOW TABLES;"
+
+# 查看迁移状态
+showmigrations:
+	docker-compose exec web python manage.py showmigrations
+
+# 创建迁移文件
+makemigrations:
+	docker-compose exec web python manage.py makemigrations
 
 # 查看状态
 status:

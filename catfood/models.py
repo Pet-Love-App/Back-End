@@ -240,3 +240,37 @@ class CatFoodRating(models.Model):
 
     def __str__(self):
         return f"{self.user.username} rated {self.catfood.name}: {self.score}⭐"
+
+
+class CatFoodFavorite(models.Model):
+    """
+    猫粮收藏记录
+    记录用户收藏的猫粮
+    """
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="catfood_favorites",
+        help_text="收藏用户",
+    )
+    catfood = models.ForeignKey(
+        CatFood,
+        on_delete=models.CASCADE,
+        related_name="favorited_by",
+        help_text="被收藏的猫粮",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, help_text="收藏时间")
+
+    class Meta:
+        db_table = "catfood_favorite"
+        unique_together = [["user", "catfood"]]  # 一个用户对同一个猫粮只能收藏一次
+        verbose_name = "猫粮收藏"
+        verbose_name_plural = "猫粮收藏"
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["user", "-created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.user.username} favorited {self.catfood.name}"

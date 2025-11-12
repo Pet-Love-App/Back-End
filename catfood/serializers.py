@@ -9,6 +9,7 @@ from additive.models import Additive, Ingredient
 from .models import (
     CatFood,
     CatFoodAdditive,
+    CatFoodFavorite,
     CatFoodIngredient,
     CatFoodTag,
     CatFoodTagRelation,
@@ -259,3 +260,35 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
                 CatFoodAdditive.objects.create(catfood=catfood, additive=additive, order=order)
             except Additive.DoesNotExist:
                 pass
+
+
+class CatFoodFavoriteSerializer(serializers.ModelSerializer):
+    """
+    猫粮收藏序列化器
+    """
+
+    catfood = CatFoodSerializer(read_only=True)
+    catfood_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = CatFoodFavorite
+        fields = ["id", "catfood", "catfood_id", "created_at"]
+        read_only_fields = ["id", "created_at"]
+
+    def validate_catfood_id(self, value):
+        """验证猫粮是否存在"""
+        if not CatFood.objects.filter(id=value).exists():
+            raise serializers.ValidationError("猫粮不存在")
+        return value
+
+    def create(self, validated_data):
+        """创建收藏"""
+        user = self.context["request"].user
+        catfood_id = validated_data["catfood_id"]
+
+        # 检查是否已经收藏
+        if CatFoodFavorite.objects.filter(user=user, catfood_id=catfood_id).exists():
+            raise serializers.ValidationError({"detail": "您已经收藏过这个猫粮了"})
+
+        favorite = CatFoodFavorite.objects.create(user=user, catfood_id=catfood_id)
+        return favorite

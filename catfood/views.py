@@ -11,8 +11,12 @@ from rest_framework.response import Response
 from comment.models import Comment
 from comment.serializers import CommentSerializer
 
-from .models import CatFood
-from .serializers import CatFoodCreateUpdateSerializer, CatFoodSerializer
+from .models import CatFood, CatFoodFavorite
+from .serializers import (
+    CatFoodCreateUpdateSerializer,
+    CatFoodFavoriteSerializer,
+    CatFoodSerializer,
+)
 
 
 class CatFoodViewSet(viewsets.ModelViewSet):
@@ -125,3 +129,104 @@ class CatFoodViewSet(viewsets.ModelViewSet):
 
         serializer = CommentSerializer(comments, many=True, context={"request": request})
         return Response(serializer.data)
+
+
+class CatFoodFavoriteViewSet(viewsets.ModelViewSet):
+    """
+    猫粮收藏视图集
+    """
+
+    serializer_class = CatFoodFavoriteSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        """只返回当前用户的收藏"""
+        return CatFoodFavorite.objects.filter(user=self.request.user).select_related("catfood")
+
+    def list(self, request, *args, **kwargs):
+        """
+        获取当前用户的收藏列表
+        GET /api/catfood/favorites/
+        """
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        """
+        收藏猫粮
+        POST /api/catfood/favorites/
+        Body: {"catfood_id": 1}
+        """
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        取消收藏
+        DELETE /api/catfood/favorites/{id}/
+        """
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        return Response({"detail": "取消收藏成功"}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=["post"], url_path="toggle")
+    def toggle_favorite(self, request):
+        """
+        切换收藏状态（收藏/取消收藏）
+        POST /api/catfood/favorites/toggle/
+        Body: {"catfood_id": 1}
+        """
+        catfood_id = request.data.get("catfood_id")
+
+        if not catfood_id:
+            return Response({"error": "请提供 catfood_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            catfood = CatFood.objects.get(id=catfood_id)
+        except CatFood.DoesNotExist:
+            return Response({"error": "猫粮不存在"}, status=status.HTTP_404_NOT_FOUND)
+
+        favorite = CatFoodFavorite.objects.filter(user=request.user, catfood=catfood).first()
+
+        if favorite:
+            # 已收藏，取消收藏
+            favorite.delete()
+            return Response(
+                {"detail": "取消收藏成功", "is_favorited": False}, status=status.HTTP_200_OK
+            )
+        else:
+            # 未收藏，添加收藏
+            favorite = CatFoodFavorite.objects.create(user=request.user, catfood=catfood)
+            serializer = self.get_serializer(favorite)
+            return Response(
+                {"detail": "收藏成功", "is_favorited": True, "favorite": serializer.data},
+                status=status.HTTP_201_CREATED,
+            )
+
+    @action(detail=False, methods=["post"], url_path="check")
+    def check_favorite(self, request):
+        """
+        检查是否已收藏
+        POST /api/catfood/favorites/check/
+        Body: {"catfood_id": 1}
+        """
+        catfood_id = request.data.get("catfood_id")
+
+        if not catfood_id:
+            return Response({"error": "请提供 catfood_id"}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_favorited = CatFoodFavorite.objects.filter(
+            user=request.user, catfood_id=catfood_id
+        ).exists()
+
+        return Response({"is_favorited": is_favorited}, status=status.HTTP_200_OK)
