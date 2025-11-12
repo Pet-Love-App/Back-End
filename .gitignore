@@ -121,6 +121,9 @@ __pypackages__/
 # Sphinx documentation
 docs/_build/
 
+# Documentation folder
+docs/
+
 # PyBuilder
 target/
 
@@ -154,3 +157,4 @@ yarn-error.log*
 node_modules/
 package-lock.json
 yarn.lock
+
