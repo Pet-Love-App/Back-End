@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     CatFood,
     CatFoodAdditive,
+    CatFoodFavorite,
     CatFoodIngredient,
     CatFoodRating,
     CatFoodTag,
@@ -129,3 +130,15 @@ class CatFoodAdditiveAdmin(admin.ModelAdmin):
     list_filter = ["catfood"]
     search_fields = ["catfood__name", "additive__name"]
     autocomplete_fields = ["catfood", "additive"]
+
+
+@admin.register(CatFoodFavorite)
+class CatFoodFavoriteAdmin(admin.ModelAdmin):
+    """猫粮收藏管理"""
+
+    list_display = ["id", "user", "catfood", "created_at"]
+    list_filter = ["created_at"]
+    search_fields = ["user__username", "catfood__name", "catfood__brand"]
+    readonly_fields = ["created_at"]
+    date_hierarchy = "created_at"
+    autocomplete_fields = ["user", "catfood"]
