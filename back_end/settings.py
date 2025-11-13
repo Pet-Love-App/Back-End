@@ -59,6 +59,9 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "djoser",
+    "ai_report",
+    'ocr.apps.OcrConfig',
+
 ]
 
 MIDDLEWARE = [
