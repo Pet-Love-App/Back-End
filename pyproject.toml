@@ -16,7 +16,11 @@ django-cors-headers = "^4.3.0"
 mysqlclient = "^2.1.0"
 gunicorn = "^21.2.0"
 python-dotenv = "^1.0.0"
-
+paddleocr = "^3.3.1"
+paddlepaddle = "^3.2.1"
+opencv-contrib-python = "^4.10.0"
+numpy = "^2.0.2"
+pillow = "^11.3.0"
 # 开发依赖
 # poetry install --only=main只安装生产依赖
 djoser = "^2.3.3"
@@ -25,6 +29,8 @@ pydantic = {extras = ["email"], version = "^2.12.3"}
 requests = "^2.32.5"
 pymysql = "^1.1.2"
 jq = "^1.10.0"
+coverage = "^6.4.4"  # 测试覆盖率
+python-dateutil = "^2.9.0"  # 时间处理工具
 [tool.poetry.group.dev.dependencies]
 ruff = "^0.8.0"
 pytest = "^8.0.0"
