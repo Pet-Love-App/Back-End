@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y \
     netcat-openbsd \
     libjpeg-dev \
     zlib1g-dev \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装Poetry（使用清华源）
@@ -43,6 +45,10 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
     python-dotenv==1.0.0 \
     gunicorn==21.2.0 \
     requests==2.32.5
+    paddleocr==3.3.1 \
+    paddlepaddle==3.2.1 \
+    opencv-contrib-python==4.10.0 \
+    numpy==2.0.2
 
 # 复制项目代码
 COPY . .
