@@ -30,10 +30,17 @@ urlpatterns = [
     path("api/user/", include("user.urls")),
     # AI 报告
     path("api/ai/", include("ai_report.urls")),
+<<<<<<< back_end/urls.py
+    path('ocr/', include('ocr.urls')),  # 关键：将ocr应用的urls包含进来
+    path("api/catfood/", include("catfood.urls")),
+    # 评论系统
+    path("api/comments/", include("comment.urls")),
+=======
     # 猫粮管理
     path("api/catfood/", include("catfood.urls")),
     # 评论系统
     path("api/comments/", include("comment.urls")),
+>>>>>>> back_end/urls.py
 ]
 
 # 开发环境提供 media 文件访问
