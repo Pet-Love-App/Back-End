@@ -44,7 +44,7 @@ RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
     pillow==10.4.0 \
     python-dotenv==1.0.0 \
     gunicorn==21.2.0 \
-    requests==2.32.5
+    requests==2.32.5 \
     paddleocr==3.3.1 \
     paddlepaddle==3.2.1 \
     opencv-contrib-python==4.10.0 \
