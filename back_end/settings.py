@@ -45,6 +45,7 @@ INSTALLED_APPS = [
     "additive",
     "user",  # 用户管理（头像、宠物）
     "ai_report",
+    "ocr",  # OCR 识别
     "catfood",  # 猫粮管理
     "comment",  # 评论系统
     "corsheaders",  # CORS 支持
@@ -59,8 +60,6 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "djoser",
-    'ocr.apps.OcrConfig',
-
 ]
 
 MIDDLEWARE = [
@@ -178,6 +177,7 @@ else:
             },
         }
     }
+
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
