@@ -15,13 +15,36 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 
+from django.conf import settings
+from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("additive", include("additive.urls")),
+    path("additive/", include("additive.urls")),
+    # 用户认证（注册、登录、JWT）
+    path("api/auth/", include("djoser.urls")),
+    path("api/auth/", include("djoser.urls.jwt")),
+    # 用户资料（头像、宠物）
+    path("api/user/", include("user.urls")),
+    # AI 报告
     path("api/ai/", include("ai_report.urls")),
+<<<<<<< back_end/urls.py
     path('ocr/', include('ocr.urls')),  # 关键：将ocr应用的urls包含进来
-
+    path("api/catfood/", include("catfood.urls")),
+    # 评论系统
+    path("api/comments/", include("comment.urls")),
+=======
+    # 猫粮管理
+    path("api/catfood/", include("catfood.urls")),
+    # 评论系统
+    path("api/comments/", include("comment.urls")),
+>>>>>>> back_end/urls.py
 ]
+
+# 开发环境提供 media 文件访问
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+
+# 生产环境通过 Nginx 提供 media 文件

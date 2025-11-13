@@ -1,6 +1,4 @@
 # docker-compose.yml
-version: "3.8"
-
 services:
   db:
     image: mysql:8.0
@@ -20,8 +18,7 @@ services:
       - --default-authentication-plugin=mysql_native_password
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
-      - --character-set-client-handshake=FALSE
-      - --init-connect='SET NAMES utf8mb4'
+      - --skip-character-set-client-handshake
 
   web:
     build: .
@@ -30,8 +27,8 @@ services:
     command: python manage.py runserver 0.0.0.0:8000
     volumes:
       - .:/app
-      - static_volume:/app/staticfiles
-      - media_volume:/app/media
+      - ./staticfiles:/app/staticfiles
+      - ./media:/app/media
     ports:
       - "8000:8000" # 暴露给系统 Nginx
     depends_on:
@@ -65,8 +62,6 @@ services:
 
 volumes:
   mysql_data:
-  static_volume:
-  media_volume:
 
 networks:
   backend_network:

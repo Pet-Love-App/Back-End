@@ -11,10 +11,19 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
+from datetime import timedelta
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# 加载 .env 文件（如果存在）
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(BASE_DIR / ".env")
+except ImportError:
+    pass  # 如果没有安装 python-dotenv，跳过
 
 
 # Quick-start development settings - unsuitable for production
@@ -32,7 +41,12 @@ ALLOWED_HOSTS = ["82.157.255.92", "localhost", "127.0.0.1"]
 # Application definition
 
 INSTALLED_APPS = [
+    # 自建应用
     "additive",
+    "user",  # 用户管理（头像、宠物）
+    "ai_report",
+    "catfood",  # 猫粮管理
+    "comment",  # 评论系统
     "corsheaders",  # CORS 支持
     "django.contrib.admin",
     "django.contrib.auth",
@@ -40,10 +54,11 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    "ai_report",
-    'ocr.apps.OcrConfig', # OCR 应用
-
-
+    # 用户认证
+    "rest_framework",
+    "rest_framework_simplejwt",
+    "rest_framework_simplejwt.token_blacklist",
+    "djoser",
 ]
 
 MIDDLEWARE = [
@@ -56,6 +71,50 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# CORS 配置
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8081",  # Expo 默认端口
+    "http://localhost:19006",  # Expo web
+]
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.AllowAny",
+    ],
+}
+
+# Simple JWT 配置
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": True,
+}
+
+# Djoser 配置
+DJOSER = {
+    "LOGIN_FIELD": "username",
+    "USER_CREATE_PASSWORD_RETYPE": True,
+    "USERNAME_CHANGED_EMAIL_CONFIRMATION": False,
+    "PASSWORD_CHANGED_EMAIL_CONFIRMATION": False,
+    "SEND_CONFIRMATION_EMAIL": False,
+    "SEND_ACTIVATION_EMAIL": False,
+    "SET_USERNAME_RETYPE": True,
+    "SET_PASSWORD_RETYPE": True,
+    "PASSWORD_RESET_CONFIRM_URL": "password/reset/confirm/{uid}/{token}",
+    "USERNAME_RESET_CONFIRM_URL": "username/reset/confirm/{uid}/{token}",
+    "ACTIVATION_URL": "activate/{uid}/{token}",
+    "SERIALIZERS": {
+        "user_create": "back_end.serializers.CustomUserCreateSerializer",
+        "set_password": "back_end.serializers.CustomSetPasswordSerializer",
+        "current_user": "djoser.serializers.UserSerializer",
+    },
+}
 
 ROOT_URLCONF = "back_end.urls"
 
@@ -91,24 +150,32 @@ WSGI_APPLICATION = "back_end.wsgi.application"
 #     }
 # }
 
-# # 临时使用 sqlite 以便本地开发/调试
-# DATABASES = {
-#     "default": {
-#         "ENGINE": "django.db.backends.mysql",
-#         "NAME": os.environ.get("DB_NAME", "backend_db"),
-#         "USER": os.environ.get("DB_USER", "book14"),
-#         "PASSWORD": os.environ.get("DB_PASSWORD", "Pet_love2025!"),
-#         "HOST": os.environ.get("DB_HOST", "localhost"),
-#         "PORT": os.environ.get("DB_PORT", "3306"),
-#     }
-# }
-# settings.py 临时替换为SQLite
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+# 临时使用 sqlite 以便本地开发/调试
+# 使用环境变量 USE_SQLITE=True 来切换到 SQLite
+USE_SQLITE = os.environ.get("USE_SQLITE", "False") == "True"
+
+if USE_SQLITE:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.environ.get("DB_NAME", "backend_db"),
+            "USER": os.environ.get("DB_USER", "book14"),
+            "PASSWORD": os.environ.get("DB_PASSWORD", "Pet_love2025!"),
+            "HOST": os.environ.get("DB_HOST", "localhost"),
+            "PORT": os.environ.get("DB_PORT", "3306"),
+            "OPTIONS": {
+                "charset": "utf8mb4",
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+        }
+    }
 
 # Password validation
 # https://docs.djangoproject.com/en/5.2/ref/settings/#auth-password-validators
@@ -146,6 +213,15 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 STATIC_ROOT = os.path.join(BASE_DIR, "staticfiles")
+
+# Media files (用户上传的文件)
+MEDIA_URL = "/media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
+
+# 文件上传限制
+DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
+
 # 生产环境安全设置
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.environ.get("SECURE_SSL_REDIRECT", "False") == "True"

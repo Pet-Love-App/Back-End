@@ -9,6 +9,7 @@ from django.db import models
 
 
 class Additive(models.Model):
+    id = models.AutoField(primary_key=True)
     name = models.CharField(unique=True, max_length=45)
     en_name = models.CharField(unique=True, max_length=45)
     applicable_range = models.CharField(max_length=45)
@@ -17,6 +18,9 @@ class Additive(models.Model):
     class Meta:
         managed = False
         db_table = "additive"
+
+    def __str__(self):
+        return self.name
 
 
 class AuthGroup(models.Model):
@@ -134,6 +138,7 @@ class DjangoSession(models.Model):
 
 
 class Ingredient(models.Model):
+    id = models.AutoField(primary_key=True)
     name = models.CharField(unique=True, max_length=45)
     type = models.CharField(max_length=45)
     label = models.CharField(max_length=45, blank=True, null=True)
@@ -142,3 +147,6 @@ class Ingredient(models.Model):
     class Meta:
         managed = False
         db_table = "ingredient"
+
+    def __str__(self):
+        return self.name
