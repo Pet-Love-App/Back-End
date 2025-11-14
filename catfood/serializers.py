@@ -69,7 +69,7 @@ class CatFoodSerializer(serializers.ModelSerializer):
     """
 
     tags = serializers.SerializerMethodField()
-    nutrition = serializers.SerializerMethodField()
+    ingredient = serializers.SerializerMethodField()
     additive = serializers.SerializerMethodField()
     percentData = serializers.SerializerMethodField()
     countNum = serializers.IntegerField(source="count_num", read_only=True)
@@ -84,12 +84,11 @@ class CatFoodSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "brand",
-            "desc",
             "score",
             "countNum",
             "imageUrl",
             "tags",
-            "nutrition",
+            "ingredient",
             "additive",
             "safety",
             "nutrient",
@@ -101,11 +100,11 @@ class CatFoodSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "updated_at", "score", "countNum"]
 
     def get_tags(self, obj):
-        """获取标签列表"""
+        """获取标签列表 - 返回字符串数组"""
         tag_relations = obj.tag_relations.all()
-        return CatFoodTagSerializer([rel.tag for rel in tag_relations], many=True).data
+        return [rel.tag.name for rel in tag_relations]
 
-    def get_nutrition(self, obj):
+    def get_ingredient(self, obj):
         """获取营养成分列表"""
         ingredients = obj.ingredients.all().order_by("order")
         return IngredientSerializer([ing.ingredient for ing in ingredients], many=True).data
@@ -133,7 +132,7 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
     """
 
     tags = serializers.ListField(child=serializers.CharField(), required=False, allow_empty=True)
-    nutrition = serializers.ListField(
+    ingredient = serializers.ListField(
         child=serializers.IntegerField(), required=False, allow_empty=True
     )
     additive = serializers.ListField(
@@ -150,10 +149,9 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "brand",
-            "desc",
             "imageUrl",
             "tags",
-            "nutrition",
+            "ingredient",
             "additive",
             "safety",
             "nutrient",
@@ -177,7 +175,7 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """创建猫粮"""
         tags = validated_data.pop("tags", [])
-        nutrition = validated_data.pop("nutrition", [])
+        ingredient = validated_data.pop("ingredient", [])
         additive = validated_data.pop("additive", [])
         percent_data = validated_data.pop("percentData", {})
 
@@ -192,7 +190,7 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
         self._handle_tags(catfood, tags)
 
         # 处理营养成分
-        self._handle_nutrition(catfood, nutrition)
+        self._handle_ingredients(catfood, ingredient)
 
         # 处理添加剂
         self._handle_additives(catfood, additive)
@@ -202,7 +200,7 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         """更新猫粮"""
         tags = validated_data.pop("tags", None)
-        nutrition = validated_data.pop("nutrition", None)
+        ingredient = validated_data.pop("ingredient", None)
         additive = validated_data.pop("additive", None)
         percent_data = validated_data.pop("percentData", None)
 
@@ -224,9 +222,9 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
             self._handle_tags(instance, tags)
 
         # 更新营养成分
-        if nutrition is not None:
+        if ingredient is not None:
             instance.ingredients.all().delete()
-            self._handle_nutrition(instance, nutrition)
+            self._handle_ingredients(instance, ingredient)
 
         # 更新添加剂
         if additive is not None:
@@ -241,7 +239,7 @@ class CatFoodCreateUpdateSerializer(serializers.ModelSerializer):
             tag, _ = CatFoodTag.objects.get_or_create(name=tag_name)
             CatFoodTagRelation.objects.create(catfood=catfood, tag=tag)
 
-    def _handle_nutrition(self, catfood, ingredient_ids):
+    def _handle_ingredients(self, catfood, ingredient_ids):
         """处理营养成分"""
         for order, ingredient_id in enumerate(ingredient_ids):
             try:
