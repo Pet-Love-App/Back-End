@@ -98,6 +98,7 @@ class PetViewSet(viewsets.ModelViewSet):
 
     serializer_class = PetSerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]  # 支持文件上传
 
     def get_queryset(self):
         """只返回当前用户的宠物"""
