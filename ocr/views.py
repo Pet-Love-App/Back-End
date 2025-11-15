@@ -34,8 +34,24 @@ def get_ocr_instance(force_new=False):
 
                 gc.collect()
 
-            print("🔄 初始化 PaddleOCR 实例...")
-            ocr = PaddleOCR(lang="ch", use_angle_cls=False)  # 关闭方向分类提速
+            print("🔄 初始化 PaddleOCR 实例（轻量级配置）...")
+
+            # 使用轻量级配置加速
+            ocr = PaddleOCR(
+                lang="ch",
+                use_angle_cls=False,  # 关闭方向分类
+                det_model_dir=None,  # 使用默认检测模型
+                rec_model_dir=None,  # 使用默认识别模型
+                use_gpu=False,  # CPU 模式
+                show_log=False,  # 关闭详细日志
+                # 关键优化：禁用文档预处理和矫正
+                det_db_thresh=0.3,  # 检测阈值
+                det_db_box_thresh=0.5,  # 框阈值
+                det_db_unclip_ratio=1.6,  # 扩展比例
+                use_dilation=False,  # 不使用膨胀
+                det_db_score_mode="fast",  # 快速模式
+            )
+
             print("✅ PaddleOCR 实例初始化成功")
         except ImportError:
             raise Exception("PaddleOCR未安装，请执行`pip install paddleocr`")
@@ -87,11 +103,8 @@ def preprocess_image(local_path):
 
 def process_image_for_ocr(image_data):
     """
-    处理图片以适配 OCR 识别
-    1. 解码各种格式的图片
-    2. 调整尺寸
-    3. 增强对比度
-    4. 返回处理后的图片
+    快速处理图片以适配 OCR 识别
+    优化：减少处理步骤，加快速度
     """
     try:
         # 1. 解码图片（支持各种格式）
@@ -101,20 +114,18 @@ def process_image_for_ocr(image_data):
         if img is None:
             raise Exception("图片解码失败，不支持的图片格式")
 
-        print(f"✅ 原始图片尺寸: {img.shape}")
-
-        # 2. 调整图片尺寸（过大会导致处理慢，过小识别率低）
+        # 2. 快速调整图片尺寸（优化：降低最大尺寸以加快处理）
         height, width = img.shape[:2]
-        max_size = 1920  # 最大边长
-        min_size = 100  # 最小边长
+        max_size = 1280  # 降低最大边长（从1920降到1280）
+        min_size = 200  # 提高最小边长
 
         # 如果图片太小
         if max(height, width) < min_size:
             scale = min_size / max(height, width)
             new_width = int(width * scale)
             new_height = int(height * scale)
-            img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_CUBIC)
-            print(f"📏 图片放大到: {img.shape}")
+            img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_LINEAR)
+            print(f"📏 图片放大: {width}x{height} -> {new_width}x{new_height}")
 
         # 如果图片太大
         elif max(height, width) > max_size:
@@ -122,19 +133,9 @@ def process_image_for_ocr(image_data):
             new_width = int(width * scale)
             new_height = int(height * scale)
             img = cv2.resize(img, (new_width, new_height), interpolation=cv2.INTER_AREA)
-            print(f"📏 图片缩小到: {img.shape}")
-
-        # 3. 图片预处理（可选，根据实际效果调整）
-        # 轻微降噪
-        # img = cv2.fastNlMeansDenoisingColored(img, None, 10, 10, 7, 21)
-
-        # 增强对比度（可选）
-        # lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
-        # l, a, b = cv2.split(lab)
-        # clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
-        # l = clahe.apply(l)
-        # img = cv2.merge([l, a, b])
-        # img = cv2.cvtColor(img, cv2.COLOR_LAB2BGR)
+            print(f"📏 图片缩小: {width}x{height} -> {new_width}x{new_height}")
+        else:
+            print(f"✅ 图片尺寸合适: {width}x{height}")
 
         return img
 
