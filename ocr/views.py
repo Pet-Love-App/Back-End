@@ -13,21 +13,45 @@ from .models import OcrResult
 
 # 延迟初始化PaddleOCR（避免启动时加载失败）
 ocr = None
+ocr_lock = None
 
 
-def get_ocr_instance():
-    """获取PaddleOCR实例（单例模式）"""
+def get_ocr_instance(force_new=False):
+    """
+    获取PaddleOCR实例
+    force_new: 是否强制创建新实例（用于错误恢复）
+    """
     global ocr
-    if ocr is None:
+
+    if force_new or ocr is None:
         try:
             from paddleocr import PaddleOCR
 
+            # 清理旧实例
+            if ocr is not None:
+                del ocr
+                import gc
+
+                gc.collect()
+
+            print("🔄 初始化 PaddleOCR 实例...")
             ocr = PaddleOCR(lang="ch", use_angle_cls=False)  # 关闭方向分类提速
+            print("✅ PaddleOCR 实例初始化成功")
         except ImportError:
             raise Exception("PaddleOCR未安装，请执行`pip install paddleocr`")
         except Exception as e:
             raise Exception(f"PaddleOCR初始化失败: {str(e)}")
     return ocr
+
+
+def get_lock():
+    """获取线程锁（防止并发问题）"""
+    global ocr_lock
+    if ocr_lock is None:
+        import threading
+
+        ocr_lock = threading.Lock()
+    return ocr_lock
 
 
 # 新增：图片预处理函数（输入本地文件路径，输出处理后的numpy数组）
@@ -147,10 +171,29 @@ def ocr_recognize(request):
         print("🔧 开始图片预处理...")
         img = process_image_for_ocr(image_data)
 
-        # 2. 调用 OCR 识别
+        # 2. 调用 OCR 识别（使用锁防止并发问题）
         print("🔍 开始 OCR 识别...")
-        ocr_instance = get_ocr_instance()
-        ocr_output = ocr_instance.ocr(img)
+        lock = get_lock()
+
+        ocr_output = None
+        retry_count = 0
+        max_retries = 2
+
+        while retry_count < max_retries and ocr_output is None:
+            try:
+                with lock:
+                    # 如果是重试，创建新的 OCR 实例
+                    ocr_instance = get_ocr_instance(force_new=(retry_count > 0))
+                    ocr_output = ocr_instance.ocr(img)
+            except RuntimeError as e:
+                if "std::exception" in str(e) and retry_count < max_retries - 1:
+                    print(f"⚠️ OCR 处理失败，尝试重新初始化... (第 {retry_count + 1} 次)")
+                    retry_count += 1
+                    import time
+
+                    time.sleep(1)  # 等待1秒后重试
+                else:
+                    raise
 
         # 3. 解析识别结果
         print("📊 解析识别结果...")
