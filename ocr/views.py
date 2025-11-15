@@ -40,16 +40,13 @@ def get_ocr_instance(force_new=False):
             ocr = PaddleOCR(
                 lang="ch",
                 use_angle_cls=False,  # 关闭方向分类
-                det_model_dir=None,  # 使用默认检测模型
-                rec_model_dir=None,  # 使用默认识别模型
                 use_gpu=False,  # CPU 模式
                 show_log=False,  # 关闭详细日志
-                # 关键优化：禁用文档预处理和矫正
+                # 优化检测参数
                 det_db_thresh=0.3,  # 检测阈值
                 det_db_box_thresh=0.5,  # 框阈值
                 det_db_unclip_ratio=1.6,  # 扩展比例
                 use_dilation=False,  # 不使用膨胀
-                det_db_score_mode="fast",  # 快速模式
             )
 
             print("✅ PaddleOCR 实例初始化成功")
