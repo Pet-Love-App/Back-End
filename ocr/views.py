@@ -154,31 +154,35 @@ def ocr_recognize(request):
 
         # 3. 解析识别结果
         print("📊 解析识别结果...")
-        print(f"🔍 OCR 输出类型: {type(ocr_output)}")
-        print(f"🔍 OCR 输出长度: {len(ocr_output) if ocr_output else 0}")
-
-        if ocr_output and len(ocr_output) > 0:
-            print(f"🔍 第一页类型: {type(ocr_output[0])}")
-            print(f"🔍 第一页内容: {ocr_output[0]}")
-            if ocr_output[0]:
-                print(f"🔍 第一页长度: {len(ocr_output[0])}")
-                if len(ocr_output[0]) > 0:
-                    print(f"🔍 第一行示例: {ocr_output[0][0]}")
-
         recognized_texts = []
         confidences = []
 
-        # PaddleOCR 返回格式: [[[box], (text, confidence)], ...]
-        if ocr_output and len(ocr_output) > 0 and ocr_output[0]:
-            for idx, line in enumerate(ocr_output[0]):
-                if line and len(line) >= 2:
-                    # line[0] 是坐标框，line[1] 是 (文本, 置信度)
-                    text_info = line[1]
-                    if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
-                        text, confidence = text_info[0], text_info[1]
-                        recognized_texts.append(str(text))
-                        confidences.append(float(confidence))
-                        print(f"  📝 第 {idx + 1} 行: {text} (置信度: {confidence:.4f})")
+        # PaddleOCR 新版本返回 OCRResult 对象
+        if ocr_output and len(ocr_output) > 0:
+            result = ocr_output[0]
+
+            # 检查是否是字典类型（OCRResult 对象）
+            if isinstance(result, dict):
+                # 新版 PaddleOCR 返回格式
+                recognized_texts = result.get("rec_texts", [])
+                confidences = result.get("rec_scores", [])
+
+                print(f"✅ 识别到 {len(recognized_texts)} 行文本")
+                for idx, (text, conf) in enumerate(
+                    zip(recognized_texts, confidences, strict=False)
+                ):
+                    print(f"  📝 第 {idx + 1} 行: {text} (置信度: {conf:.4f})")
+
+            # 兼容旧版格式: [[[box], (text, confidence)], ...]
+            elif isinstance(result, list):
+                for idx, line in enumerate(result):
+                    if line and len(line) >= 2:
+                        text_info = line[1]
+                        if isinstance(text_info, (list, tuple)) and len(text_info) >= 2:
+                            text, confidence = text_info[0], text_info[1]
+                            recognized_texts.append(str(text))
+                            confidences.append(float(confidence))
+                            print(f"  📝 第 {idx + 1} 行: {text} (置信度: {confidence:.4f})")
 
         # 4. 拼接结果
         if not recognized_texts:
