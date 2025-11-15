@@ -34,18 +34,13 @@ def get_ocr_instance(force_new=False):
 
                 gc.collect()
 
-            print("🔄 初始化 PaddleOCR 实例（优化配置）...")
+            print("🔄 初始化 PaddleOCR 实例...")
 
-            # 使用优化配置加速
+            # 使用最简单的配置（兼容所有版本）
             ocr = PaddleOCR(
                 lang="ch",
-                use_angle_cls=False,  # 关闭方向分类
-                use_gpu=False,  # CPU 模式
+                use_angle_cls=False,  # 关闭方向分类（加速）
                 show_log=False,  # 关闭详细日志
-                # 优化检测参数
-                det_db_thresh=0.3,  # 检测阈值
-                det_db_box_thresh=0.5,  # 框阈值
-                det_db_unclip_ratio=1.6,  # 扩展比例
             )
 
             print("✅ PaddleOCR 实例初始化成功")
