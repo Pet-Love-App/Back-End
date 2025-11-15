@@ -36,12 +36,8 @@ def get_ocr_instance(force_new=False):
 
             print("🔄 初始化 PaddleOCR 实例...")
 
-            # 使用最简单的配置（兼容所有版本）
-            ocr = PaddleOCR(
-                lang="ch",
-                use_angle_cls=False,  # 关闭方向分类（加速）
-                show_log=False,  # 关闭详细日志
-            )
+            # 使用最基础的配置（最大兼容性）
+            ocr = PaddleOCR(lang="ch", use_angle_cls=False)
 
             print("✅ PaddleOCR 实例初始化成功")
         except ImportError:
