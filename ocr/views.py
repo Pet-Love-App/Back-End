@@ -34,9 +34,9 @@ def get_ocr_instance(force_new=False):
 
                 gc.collect()
 
-            print("🔄 初始化 PaddleOCR 实例（轻量级配置）...")
+            print("🔄 初始化 PaddleOCR 实例（优化配置）...")
 
-            # 使用轻量级配置加速
+            # 使用优化配置加速
             ocr = PaddleOCR(
                 lang="ch",
                 use_angle_cls=False,  # 关闭方向分类
@@ -46,7 +46,6 @@ def get_ocr_instance(force_new=False):
                 det_db_thresh=0.3,  # 检测阈值
                 det_db_box_thresh=0.5,  # 框阈值
                 det_db_unclip_ratio=1.6,  # 扩展比例
-                use_dilation=False,  # 不使用膨胀
             )
 
             print("✅ PaddleOCR 实例初始化成功")
@@ -277,74 +276,3 @@ def ocr_recognize(request):
             error_message = "图片过大，请压缩后重试"
 
         return JsonResponse({"error": error_message}, status=500)
-
-    # @csrf_exempt
-    # def ocr_recognize(request):
-    """优化后的OCR识别接口（适配PaddleOCR 3.3.1）"""
-    if request.method != "POST":
-        return JsonResponse({"error": "只支持POST请求"}, status=405)
-
-    # 校验文件
-    if "image" not in request.FILES:
-        return JsonResponse({"error": "请上传图片文件"}, status=400)
-    image_file = request.FILES["image"]
-
-    try:
-        # 保存图片（使用Django文件存储机制）
-        timestamp = int(time.time())
-        filename = f"{timestamp}_{image_file.name}"
-        file_path = default_storage.save(f"ocr_images/{filename}", ContentFile(image_file.read()))
-        local_path = default_storage.path(file_path)  # 获取本地路径用于OCR识别
-
-        # 新增：调用预处理函数（仅添加这一行，不改动原有保存逻辑）
-        processed_img = preprocess_image(local_path)
-
-        # 调用OCR识别：传入预处理后的numpy数组（替代原本地路径）
-        ocr_instance = get_ocr_instance()
-        ocr_output = ocr_instance.ocr(processed_img)  # 3.3.1支持ndarray输入
-
-        # 处理识别结果（适配3.x版本的列表格式）
-        recognized_texts = []  # 存储所有识别文本
-        confidences = []  # 存储所有置信度
-
-        # 遍历OCR结果（支持多页，此处取第1页）
-        if ocr_output and isinstance(ocr_output[0], dict):
-            ocr_dict = ocr_output[0]  # 提取列表中的字典
-            # 2. 从字典中获取rec_texts（识别文本列表）和rec_scores（置信度列表）
-            recognized_texts = ocr_dict.get("rec_texts", [])
-            confidences = ocr_dict.get("rec_scores", [])
-
-        # 拼接文本和计算平均置信度
-        full_text = " ".join(recognized_texts)
-        avg_confidence = round(sum(confidences) / len(confidences), 4) if confidences else 0.0
-        # print("完整识别文本：", full_text)
-        # print("平均置信度：", avg_confidence)
-        # 保存到数据库
-        ocr_result = OcrResult.objects.create(
-            image=file_path, recognized_text=full_text.strip(), confidence=avg_confidence
-        )
-
-        return JsonResponse(
-            {
-                "message": "识别成功",
-                "result": {
-                    "id": ocr_result.id,
-                    "text": ocr_result.recognized_text,
-                    "confidence": ocr_result.confidence,
-                    "image_url": ocr_result.image_url,  # 确保模型中定义了image_url属性
-                    "created_at": ocr_result.created_at.strftime("%Y-%m-%d %H:%M:%S"),
-                },
-            },
-            status=201,
-        )
-
-    except Exception as e:
-        import traceback
-
-        print("OCR处理错误详情：", traceback.format_exc())
-        if isinstance(e, ImportError):
-            return JsonResponse({"error": "依赖缺失: 请安装PaddleOCR"}, status=500)
-        elif "PaddleOCR初始化失败" in str(e):
-            return JsonResponse({"error": f"服务初始化失败: {str(e)}"}, status=500)
-        else:
-            return JsonResponse({"error": f"处理失败: {str(e)}"}, status=500)
