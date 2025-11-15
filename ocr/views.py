@@ -154,6 +154,17 @@ def ocr_recognize(request):
 
         # 3. 解析识别结果
         print("📊 解析识别结果...")
+        print(f"🔍 OCR 输出类型: {type(ocr_output)}")
+        print(f"🔍 OCR 输出长度: {len(ocr_output) if ocr_output else 0}")
+
+        if ocr_output and len(ocr_output) > 0:
+            print(f"🔍 第一页类型: {type(ocr_output[0])}")
+            print(f"🔍 第一页内容: {ocr_output[0]}")
+            if ocr_output[0]:
+                print(f"🔍 第一页长度: {len(ocr_output[0])}")
+                if len(ocr_output[0]) > 0:
+                    print(f"🔍 第一行示例: {ocr_output[0][0]}")
+
         recognized_texts = []
         confidences = []
 
