@@ -8,6 +8,7 @@ import urllib.parse
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from bs4 import BeautifulSoup
 
 try:
     # Prefer requests if available for simplicity
@@ -47,17 +48,32 @@ def _post_json(url: str, data: dict, headers: dict, timeout: int = 120) -> tuple
     except Exception as e:  # pragma: no cover
         return 0, str(e)
 
+def extract_summary(html_text: str) -> str:
+    soup = BeautifulSoup(html_text, "html.parser")
+    node = soup.select_one("#J-lemma-main-wrapper > div.contentWrapper_IZKqz > div > div.mainContent_V_Z7A > div > div.lemmaSummary_LOb9D.J-summary")
+    if not node:
+        return "未找到简介"
 
-def _fetch_wikipedia_summary(title: str, lang: str = "zh", timeout: int = 10) -> tuple[int, object]:
-    """Fetch a concise page summary from Wikipedia REST API.
+    text = node.get_text(separator="", strip=True)
+    import re
+    text = re.sub(r"\[\d+\]", "", text)
+    return text
+
+def _fetch_text(title: str, timeout: int = 10) -> tuple[int, object]:
+    """Fetch a concise page summary from Baidu Baike.
 
     Returns (status_code, data) where data is a dict parsed from JSON on success,
     or a string error message on network failure.
     """
     safe_title = urllib.parse.quote(title.strip())
-    url = f"https://{lang}.wikipedia.org/api/rest_v1/page/summary/{safe_title}"
-    headers = {"Accept": "application/json", "User-Agent": "pet_love/1.0"}
-
+    url = f"https://baike.baidu.com/item/{safe_title}"
+    headers = {
+        "User-Agent": "pet_love/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+        "Accept-Language": "zh-CN,zh;q=0.8,en-US;q=0.5,en;q=0.3",
+        "Connection": "keep-alive"
+    }
+    # headers = {"Accept": "application/json", "User-Agent": "pet_love/1.0"}
     if requests is not None:
         try:
             resp = requests.get(url, headers=headers, timeout=timeout)
@@ -123,28 +139,27 @@ def _to_simplified(text: str) -> str:
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
 def ingredient_info(request: HttpRequest) -> JsonResponse:
-    """Return a short Wikipedia summary for a given ingredient name.
+    """Return a short summary for a given ingredient name.
 
-    GET params: q (ingredient name), lang (optional, default 'zh')
-    POST JSON: {"ingredient": "维生素D", "lang": "zh"}
+    GET params: q (ingredient name)
+    POST JSON: {"ingredient": "维生素D"}
 
-    Response JSON: { ok: bool, title, extract, url, lang }
+    Response JSON: { ok: bool, title, extract, url}
     """
     if request.method == "GET":
         q = (request.GET.get("q") or "").strip()
-        lang = (request.GET.get("lang") or "zh").strip()
     else:
         try:
             payload = json.loads(request.body.decode("utf-8") or "{}")
         except json.JSONDecodeError:
             return JsonResponse({"ok": False, "error": {"code": "bad_json", "message": "Invalid JSON"}}, status=400, json_dumps_params={"ensure_ascii": False})
         q = (payload.get("ingredient") or payload.get("q") or "").strip()
-        lang = (payload.get("lang") or "zh").strip()
 
     if not q:
         return JsonResponse({"ok": False, "error": {"code": "missing_ingredient", "message": "Provide 'q' or 'ingredient'"}}, status=400, json_dumps_params={"ensure_ascii": False})
 
-    status, data = _fetch_wikipedia_summary(q, lang=lang)
+    status, data = _fetch_text(q)
+    data=extract_summary(data)
     if status == 0:
         return JsonResponse({"ok": False, "error": {"code": "network", "message": "request failed", "detail": data}}, status=502, json_dumps_params={"ensure_ascii": False})
 
@@ -167,12 +182,56 @@ def ingredient_info(request: HttpRequest) -> JsonResponse:
             if isinstance(desktop, dict):
                 page_url = desktop.get("page")
         if not page_url:
-            page_url = f"https://{lang}.wikipedia.org/wiki/{urllib.parse.quote(title)}"
+            page_url = f"https://baike.baidu.com/item/{urllib.parse.quote(title)}"
 
-        return JsonResponse({"ok": True, "title": title, "extract": extract, "url": page_url, "lang": lang}, status=200, json_dumps_params={"ensure_ascii": False})
+        return JsonResponse({"ok": True, "title": title, "extract": extract, "url": page_url}, status=200, json_dumps_params={"ensure_ascii": False})
 
     return JsonResponse({"ok": False, "error": {"code": "invalid_response", "detail": str(data)}}, status=502, json_dumps_params={"ensure_ascii": False})
 
+from typing import Optional, List
+
+
+class PercentData:
+    """百分比数据"""
+    carbohydrates: Optional[float]
+    crude_ash: Optional[float]
+    crude_fat: Optional[float]
+    crude_fiber: Optional[float]
+    crude_protein: Optional[float]
+    others: Optional[float]
+
+    def __init__(self, carbohydrates: Optional[float], crude_ash: Optional[float], crude_fat: Optional[float], crude_fiber: Optional[float], crude_protein: Optional[float], others: Optional[float]) -> None:
+        self.carbohydrates = carbohydrates
+        self.crude_ash = crude_ash
+        self.crude_fat = crude_fat
+        self.crude_fiber = crude_fiber
+        self.crude_protein = crude_protein
+        self.others = others
+
+
+class Request:
+    """Request"""
+    additive: List[str]
+    ingredient: List[str]
+    """营养分析"""
+    nutrient: str
+    """百分比数据"""
+    percent_data: PercentData
+    """是否支持百分比分析"""
+    percentage: bool
+    """安全性分析"""
+    safety: str
+    """标签"""
+    tags: List[str]
+
+    def __init__(self, additive: List[str], ingredient: List[str], nutrient: str, percent_data: PercentData, percentage: bool, safety: str, tags: List[str]) -> None:
+        self.additive = additive
+        self.ingredient = ingredient
+        self.nutrient = nutrient
+        self.percent_data = percent_data
+        self.percentage = percentage
+        self.safety = safety
+        self.tags = tags
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
@@ -234,6 +293,7 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         "严格要求：\n"
         "- 只能输出 JSON 对象本身，禁止出现任何额外文字（包括‘首先’、‘现在’、‘需要’、‘说明’、‘分析’等词句）、禁止重复题目或解释步骤。\n"
         "- 字段说明（英文字段名，内容中文）：\n"
+        "  - tags（array，分析产品特征（幼猫粮，成猫粮，全价猫粮，无谷，高蛋白，泌尿健康，养毛护肤，呵护肠胃，增肥发腮，高含肉量），元素为字符串）。\n"
         "  - additives（array，可选，识别到的添加剂名称列表，元素为字符串）。\n"
         "  - identified_nutrients（array，可选，识别到的营养成分或营养标签的名称列表，元素为字符串）。\n"
         "  - safety（string，必填，大约50个汉字的针对猫粮的简要安全性分析，重点关注添加剂）；\n"
@@ -286,20 +346,39 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
 
     if status >= 400 or data is None:
         # Return the minimal schema with empty/nulls (no extra debug fields)
-        result = {
-            "additives": [],
-            "identified_nutrients": [],
-            "safety": "",
-            "nutrient": "",
-            "percentage": False,
-            "crude_protein": None,
-            "crude_fat": None,
-            "carbohydrates": None,
-            "crude_fiber": None,
-            "crude_ash": None,
-            "others": None,
+        result = Request(
+            tags=[],
+            additive=[],
+            ingredient=[],
+            nutrient="",
+            safety="",
+            percentage=False,
+            percent_data=PercentData(
+                carbohydrates=None,
+                crude_ash=None,
+                crude_fat=None,
+                crude_fiber=None,
+                crude_protein=None,
+                others=None,
+            ),
+        )
+        resp={
+            "additive": result.additive,
+            "ingredient": result.ingredient,
+            "nutrient": result.nutrient,
+            "percent_data": {
+                "carbohydrates": result.percent_data.carbohydrates,
+                "crude_ash": result.percent_data.crude_ash,
+                "crude_fat": result.percent_data.crude_fat,
+                "crude_fiber": result.percent_data.crude_fiber,
+                "crude_protein": result.percent_data.crude_protein,
+                "others": result.percent_data.others,
+            },
+            "percentage": result.percentage,
+            "safety": result.safety,
+            "tags": result.tags,
         }
-        return JsonResponse(result, status=200)
+        return JsonResponse(resp, status=200)
 
     # Extract assistant text from common provider shapes
     extracted_text = None
@@ -376,21 +455,45 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         # fallback
         return [str(v).strip()]
 
-    schema = {
-        "additives": [],
-        "identified_nutrients": [],
-        "safety": "",
-        "nutrient": "",
-        "percentage": None,
-        "crude_protein": None,
-        "crude_fat": None,
-        "carbohydrates": None,
-        "crude_fiber": None,
-        "crude_ash": None,
-        "others": None,
-    }
+    schema = Request(
+            tags=[],
+            additive=[],
+            ingredient=[],
+            nutrient="",
+            safety="",
+            percentage=False,
+            percent_data=PercentData(
+                carbohydrates=None,
+                crude_ash=None,
+                crude_fat=None,
+                crude_fiber=None,
+                crude_protein=None,
+                others=None,
+            ),
+        )
 
     if isinstance(parsed, dict):
+        # Extract tags
+        raw_tags = (
+            parsed.get("tags")
+            or parsed.get("product_tags")
+        )
+        # possible tags:幼猫粮，成猫粮，全价猫粮，无谷，高蛋白，泌尿健康，养毛护肤，呵护肠胃，增肥发腮，高含肉量
+        schema.tags = _to_str_list(raw_tags)
+        for tag in schema.tags:
+            if tag not in [
+                "幼猫粮",
+                "成猫粮",
+                "全价猫粮",
+                "无谷",
+                "高蛋白",
+                "泌尿健康",
+                "养毛护肤",
+                "呵护肠胃",
+                "增肥发腮",
+                "高含肉量",
+            ]:
+                schema.tags.remove(tag)
         # additives and identified nutrient names
         raw_add = (
             parsed.get("additives")
@@ -398,7 +501,7 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
             or parsed.get("additive_list")
             or parsed.get("additives_list")
         )
-        schema["additives"] = _to_str_list(raw_add)
+        schema.additive = _to_str_list(raw_add)
 
         raw_id_nut = (
             parsed.get("identified_nutrients")
@@ -406,31 +509,60 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
             or parsed.get("identified_nutrition")
             or parsed.get("nutrition_components")
         )
-        schema["identified_nutrients"] = _to_str_list(raw_id_nut)
-        schema["safety"] = str(parsed.get("safety") or parsed.get("safety_analysis") or "")
-        schema["nutrient"] = str(parsed.get("nutrient") or parsed.get("nutrition") or "")
+        schema.ingredient = _to_str_list(raw_id_nut)
+        schema.safety = str(parsed.get("safety") or parsed.get("safety_analysis") or "")
+        schema.nutrient = str(parsed.get("nutrient") or parsed.get("nutrition") or "")
         pct = (
             parsed.get("percentage")
             if parsed.get("percentage") is not None
             else parsed.get("has_percentage")
         )
         if isinstance(pct, bool):
-            schema["percentage"] = True if pct else False
+            schema.percentage = True if pct else False
         elif isinstance(pct, int | float | str):
             try:
                 iv = int(pct)
-                schema["percentage"] = True if iv != 0 else False
+                schema.percentage = True if iv != 0 else False
             except Exception:
-                schema["percentage"] = None
+                schema.percentage = False
 
-        schema["crude_protein"] = _to_number(parsed.get("crude_protein") or parsed.get("protein"))
-        schema["crude_fat"] = _to_number(parsed.get("crude_fat") or parsed.get("fat"))
-        schema["carbohydrates"] = _to_number(parsed.get("carbohydrates") or parsed.get("carb"))
-        schema["crude_fiber"] = _to_number(parsed.get("crude_fiber") or parsed.get("fiber"))
-        schema["crude_ash"] = _to_number(parsed.get("crude_ash") or parsed.get("ash"))
-        schema["others"] = _to_number(parsed.get("others"))
+        schema.percent_data.crude_protein = _to_number(parsed.get("crude_protein") or parsed.get("protein"))
+        schema.percent_data.crude_fat = _to_number(parsed.get("crude_fat") or parsed.get("fat"))
+        schema.percent_data.carbohydrates = _to_number(parsed.get("carbohydrates") or parsed.get("carb"))
+        schema.percent_data.crude_fiber = _to_number(parsed.get("crude_fiber") or parsed.get("fiber"))
+        schema.percent_data.crude_ash = _to_number(parsed.get("crude_ash") or parsed.get("ash"))
+        # others=100-sum(known)
+        schema.percent_data.others = 100 - sum(
+            filter(
+                None,
+                [
+                    schema.percent_data.crude_protein,
+                    schema.percent_data.crude_fat,
+                    schema.percent_data.carbohydrates,
+                    schema.percent_data.crude_fiber,
+                    schema.percent_data.crude_ash,
+                ],
+            )
+        )
     else:
         # If no structured JSON, do NOT include model's free-form text to avoid leaking reasoning.
         pass
 
-    return JsonResponse(schema, status=200)
+    resp={
+        "additive": schema.additive,
+        "ingredient": schema.ingredient,
+        "nutrient": schema.nutrient,
+        "percent_data": {
+            "carbohydrates": schema.percent_data.carbohydrates,
+            "crude_ash": schema.percent_data.crude_ash,
+            "crude_fat": schema.percent_data.crude_fat,
+            "crude_fiber": schema.percent_data.crude_fiber,
+            "crude_protein": schema.percent_data.crude_protein,
+            "others": schema.percent_data.others,
+        },
+        "percentage": schema.percentage,
+        "safety": schema.safety,
+        "tags": schema.tags,
+    }
+
+    return JsonResponse(resp, status=200)
