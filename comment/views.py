@@ -106,6 +106,22 @@ class CommentViewSet(viewsets.ModelViewSet):
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
+    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
+    def my_comments(self, request):
+        """
+        获取当前用户的所有评论
+        GET /api/comments/my_comments/
+        """
+        queryset = self.get_queryset().filter(author=request.user)
+
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def like(self, request, pk=None):
         """
