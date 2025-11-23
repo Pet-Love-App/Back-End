@@ -47,18 +47,24 @@ class CommentViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         """
         获取评论列表
-        支持按 target_type 和 target_id 过滤
+        支持按 target_type、target_id、author_id 和 my 过滤
         """
         queryset = self.filter_queryset(self.get_queryset())
 
         # 过滤条件
         target_type = request.query_params.get("target_type")
         target_id = request.query_params.get("target_id")
+        author_id = request.query_params.get("author_id")
+        my = request.query_params.get("my")  # 获取当前用户的评论
 
         if target_type:
             queryset = queryset.filter(target_type=target_type)
         if target_id:
             queryset = queryset.filter(target_id=target_id)
+        if author_id:
+            queryset = queryset.filter(author_id=author_id)
+        if my and request.user.is_authenticated:
+            queryset = queryset.filter(author=request.user)
 
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -105,22 +111,6 @@ class CommentViewSet(viewsets.ModelViewSet):
 
         self.perform_destroy(instance)
         return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
-    def my_comments(self, request):
-        """
-        获取当前用户的所有评论
-        GET /api/comments/my_comments/
-        """
-        queryset = self.get_queryset().filter(author=request.user)
-
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
-
-        serializer = self.get_serializer(queryset, many=True)
-        return Response(serializer.data)
 
     @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
     def like(self, request, pk=None):
