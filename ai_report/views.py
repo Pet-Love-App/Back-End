@@ -423,3 +423,199 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
     }
 
     return JsonResponse(resp, status=200)
+
+
+# 新增的报告管理API
+
+from django.shortcuts import get_object_or_404
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status as http_status
+
+from catfood.models import CatFood
+from .models import AIAnalysisReport
+from .serializers import AIAnalysisReportSerializer, AIAnalysisReportCreateSerializer
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def save_report(request):
+    """
+    保存AI分析报告到数据库
+    POST /api/ai-report/save/
+    
+    请求体示例:
+    {
+        "catfood_id": 1,
+        "ingredients_text": "鸡肉、鱼肉...",
+        "tags": ["成猫粮", "高蛋白"],
+        "additives": ["牛磺酸", "维生素E"],
+        "ingredients": ["粗蛋白", "粗脂肪"],
+        "safety": "安全性分析...",
+        "nutrient": "营养分析...",
+        "percentage": true,
+        "crude_protein": 40.0,
+        "crude_fat": 18.0,
+        "carbohydrates": 20.0,
+        "crude_fiber": 3.0,
+        "crude_ash": 8.0,
+        "others": 11.0
+    }
+    """
+    catfood_id = request.data.get('catfood_id')
+    
+    if not catfood_id:
+        return Response(
+            {'error': '缺少 catfood_id 参数'},
+            status=http_status.HTTP_400_BAD_REQUEST
+        )
+    
+    # 检查猫粮是否存在
+    try:
+        catfood = CatFood.objects.get(id=catfood_id)
+    except CatFood.DoesNotExist:
+        return Response(
+            {'error': f'猫粮 ID {catfood_id} 不存在'},
+            status=http_status.HTTP_404_NOT_FOUND
+        )
+    
+    # 准备数据
+    report_data = {
+        'catfood': catfood.id,
+        'ingredients_text': request.data.get('ingredients_text', ''),
+        'tags': request.data.get('tags', []),
+        'additives': request.data.get('additives', []),
+        'ingredients': request.data.get('ingredients', []),
+        'safety': request.data.get('safety', ''),
+        'nutrient': request.data.get('nutrient', ''),
+        'percentage': request.data.get('percentage', False),
+        'crude_protein': request.data.get('percent_data', {}).get('crude_protein') or request.data.get('crude_protein'),
+        'crude_fat': request.data.get('percent_data', {}).get('crude_fat') or request.data.get('crude_fat'),
+        'carbohydrates': request.data.get('percent_data', {}).get('carbohydrates') or request.data.get('carbohydrates'),
+        'crude_fiber': request.data.get('percent_data', {}).get('crude_fiber') or request.data.get('crude_fiber'),
+        'crude_ash': request.data.get('percent_data', {}).get('crude_ash') or request.data.get('crude_ash'),
+        'others': request.data.get('percent_data', {}).get('others') or request.data.get('others'),
+    }
+    
+    # 检查是否已存在报告
+    try:
+        existing_report = AIAnalysisReport.objects.get(catfood=catfood)
+        # 更新现有报告
+        serializer = AIAnalysisReportCreateSerializer(existing_report, data=report_data)
+        if serializer.is_valid():
+            serializer.save()
+            response_serializer = AIAnalysisReportSerializer(serializer.instance)
+            return Response({
+                'message': '报告更新成功',
+                'report': response_serializer.data
+            }, status=http_status.HTTP_200_OK)
+        return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
+    except AIAnalysisReport.DoesNotExist:
+        # 创建新报告
+        serializer = AIAnalysisReportCreateSerializer(data=report_data)
+        if serializer.is_valid():
+            serializer.save()
+            response_serializer = AIAnalysisReportSerializer(serializer.instance)
+            return Response({
+                'message': '报告保存成功',
+                'report': response_serializer.data
+            }, status=http_status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_report(request, catfood_id):
+    """
+    获取指定猫粮的AI分析报告
+    GET /api/ai-report/{catfood_id}/
+    
+    返回示例:
+    {
+        "id": 1,
+        "catfood_id": 1,
+        "catfood_name": "某品牌猫粮",
+        "ingredients_text": "...",
+        "tags": [...],
+        "additives": [...],
+        "ingredients": [...],
+        "safety": "...",
+        "nutrient": "...",
+        "percentage": true,
+        "percent_data": {...},
+        "created_at": "2025-01-01T00:00:00Z",
+        "updated_at": "2025-01-01T00:00:00Z"
+    }
+    """
+    # 检查猫粮是否存在
+    catfood = get_object_or_404(CatFood, id=catfood_id)
+    
+    # 获取报告
+    try:
+        report = AIAnalysisReport.objects.get(catfood=catfood)
+        serializer = AIAnalysisReportSerializer(report)
+        return Response(serializer.data, status=http_status.HTTP_200_OK)
+    except AIAnalysisReport.DoesNotExist:
+        return Response(
+            {
+                'error': '该猫粮暂无AI分析报告',
+                'catfood_id': catfood_id,
+                'catfood_name': catfood.name
+            },
+            status=http_status.HTTP_404_NOT_FOUND
+        )
+
+
+@api_view(['DELETE'])
+@permission_classes([AllowAny])
+def delete_report(request, catfood_id):
+    """
+    删除指定猫粮的AI分析报告（用于重新生成）
+    DELETE /api/ai-report/{catfood_id}/
+    """
+    catfood = get_object_or_404(CatFood, id=catfood_id)
+    
+    try:
+        report = AIAnalysisReport.objects.get(catfood=catfood)
+        report.delete()
+        return Response(
+            {'message': '报告删除成功，可以重新生成'},
+            status=http_status.HTTP_200_OK
+        )
+    except AIAnalysisReport.DoesNotExist:
+        return Response(
+            {'error': '该猫粮没有分析报告'},
+            status=http_status.HTTP_404_NOT_FOUND
+        )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_report_exists(request, catfood_id):
+    """
+    检查指定猫粮是否已有AI分析报告
+    GET /api/ai-report/{catfood_id}/exists/
+    
+    返回示例:
+    {
+        "exists": true,
+        "catfood_id": 1,
+        "updated_at": "2025-01-01T00:00:00Z"
+    }
+    """
+    catfood = get_object_or_404(CatFood, id=catfood_id)
+    
+    try:
+        report = AIAnalysisReport.objects.get(catfood=catfood)
+        return Response({
+            'exists': True,
+            'catfood_id': catfood_id,
+            'report_id': report.id,
+            'updated_at': report.updated_at
+        }, status=http_status.HTTP_200_OK)
+    except AIAnalysisReport.DoesNotExist:
+        return Response({
+            'exists': False,
+            'catfood_id': catfood_id
+        }, status=http_status.HTTP_200_OK)
