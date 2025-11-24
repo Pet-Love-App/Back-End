@@ -5,6 +5,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+from django.contrib.auth.models import AnonymousUser, User
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -460,8 +461,12 @@ from rest_framework.response import Response
 
 from catfood.models import CatFood
 
-from .models import AIAnalysisReport
-from .serializers import AIAnalysisReportCreateSerializer, AIAnalysisReportSerializer
+from .models import AIAnalysisReport, FavoriteReport
+from .serializers import (
+    AIAnalysisReportCreateSerializer,
+    AIAnalysisReportSerializer,
+    FavoriteReportSerializer,
+)
 
 
 @api_view(["POST"])
@@ -652,3 +657,140 @@ def check_report_exists(request, catfood_id):
             {"exists": False, "catfood_id": catfood_id, "catfood_name": catfood.name},
             status=http_status.HTTP_200_OK,
         )
+
+
+# ========== 报告收藏相关API ==========
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def get_favorite_reports(request: HttpRequest) -> Response:
+    """
+    获取用户收藏的AI报告列表
+    """
+    # 临时用户处理（后续需要改为真实用户认证）
+    if isinstance(request.user, AnonymousUser):
+        # 使用默认用户（ID=1）或返回空列表
+        try:
+            user = User.objects.get(id=1)
+        except User.DoesNotExist:
+            return Response({"results": [], "count": 0}, status=http_status.HTTP_200_OK)
+    else:
+        user = request.user
+
+    # 获取收藏列表
+    favorites = FavoriteReport.objects.filter(user=user).select_related("report", "report__catfood")
+
+    serializer = FavoriteReportSerializer(favorites, many=True)
+
+    return Response(
+        {"results": serializer.data, "count": favorites.count()}, status=http_status.HTTP_200_OK
+    )
+
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def toggle_favorite_report(request: HttpRequest) -> Response:
+    """
+    切换AI报告收藏状态
+    请求体: {"report_id": 123}
+    """
+    report_id = request.data.get("report_id")
+
+    if not report_id:
+        return Response({"error": "缺少 report_id 参数"}, status=http_status.HTTP_400_BAD_REQUEST)
+
+    # 临时用户处理
+    if isinstance(request.user, AnonymousUser):
+        try:
+            user = User.objects.get(id=1)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "用户不存在，请先登录"}, status=http_status.HTTP_401_UNAUTHORIZED
+            )
+    else:
+        user = request.user
+
+    # 检查报告是否存在
+    try:
+        report = AIAnalysisReport.objects.get(id=report_id)
+    except AIAnalysisReport.DoesNotExist:
+        return Response(
+            {"error": f"AI报告 ID {report_id} 不存在"}, status=http_status.HTTP_404_NOT_FOUND
+        )
+
+    # 检查是否已收藏
+    favorite = FavoriteReport.objects.filter(user=user, report=report).first()
+
+    if favorite:
+        # 已收藏，取消收藏
+        favorite.delete()
+        return Response(
+            {
+                "detail": "已取消收藏",
+                "is_favorited": False,
+                "report_id": report_id,
+            },
+            status=http_status.HTTP_200_OK,
+        )
+    else:
+        # 未收藏，添加收藏
+        favorite = FavoriteReport.objects.create(user=user, report=report)
+        serializer = FavoriteReportSerializer(favorite)
+        return Response(
+            {
+                "detail": "收藏成功",
+                "is_favorited": True,
+                "favorite": serializer.data,
+            },
+            status=http_status.HTTP_201_CREATED,
+        )
+
+
+@api_view(["DELETE"])
+@permission_classes([AllowAny])
+def delete_favorite_report(request: HttpRequest, favorite_id: int) -> Response:
+    """
+    删除AI报告收藏
+    """
+    # 临时用户处理
+    if isinstance(request.user, AnonymousUser):
+        try:
+            user = User.objects.get(id=1)
+        except User.DoesNotExist:
+            return Response(
+                {"error": "用户不存在，请先登录"}, status=http_status.HTTP_401_UNAUTHORIZED
+            )
+    else:
+        user = request.user
+
+    # 查找收藏记录
+    try:
+        favorite = FavoriteReport.objects.get(id=favorite_id, user=user)
+    except FavoriteReport.DoesNotExist:
+        return Response({"error": "收藏记录不存在"}, status=http_status.HTTP_404_NOT_FOUND)
+
+    favorite.delete()
+
+    return Response({"detail": "删除成功"}, status=http_status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([AllowAny])
+def check_favorite_report(request: HttpRequest, report_id: int) -> Response:
+    """
+    检查AI报告是否已收藏
+    """
+    # 临时用户处理
+    if isinstance(request.user, AnonymousUser):
+        try:
+            user = User.objects.get(id=1)
+        except User.DoesNotExist:
+            return Response({"is_favorited": False}, status=http_status.HTTP_200_OK)
+    else:
+        user = request.user
+
+    # 检查是否已收藏
+    is_favorited = FavoriteReport.objects.filter(user=user, report_id=report_id).exists()
+
+    return Response({"is_favorited": is_favorited}, status=http_status.HTTP_200_OK)
