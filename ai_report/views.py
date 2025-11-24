@@ -2,8 +2,8 @@ import json
 import os
 import re
 import urllib.error
-import urllib.request
 import urllib.parse
+import urllib.request
 
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -47,17 +47,29 @@ def _post_json(url: str, data: dict, headers: dict, timeout: int = 120) -> tuple
     except Exception as e:  # pragma: no cover
         return 0, str(e)
 
-from typing import Optional, List
+
+from typing import List, Optional
+
+
 class PercentData:
     """百分比数据"""
-    carbohydrates: Optional[float]
-    crude_ash: Optional[float]
-    crude_fat: Optional[float]
-    crude_fiber: Optional[float]
-    crude_protein: Optional[float]
-    others: Optional[float]
 
-    def __init__(self, carbohydrates: Optional[float], crude_ash: Optional[float], crude_fat: Optional[float], crude_fiber: Optional[float], crude_protein: Optional[float], others: Optional[float]) -> None:
+    carbohydrates: float | None
+    crude_ash: float | None
+    crude_fat: float | None
+    crude_fiber: float | None
+    crude_protein: float | None
+    others: float | None
+
+    def __init__(
+        self,
+        carbohydrates: float | None,
+        crude_ash: float | None,
+        crude_fat: float | None,
+        crude_fiber: float | None,
+        crude_protein: float | None,
+        others: float | None,
+    ) -> None:
         self.carbohydrates = carbohydrates
         self.crude_ash = crude_ash
         self.crude_fat = crude_fat
@@ -68,8 +80,9 @@ class PercentData:
 
 class Request:
     """Request"""
-    additive: List[str]
-    ingredient: List[str]
+
+    additive: list[str]
+    ingredient: list[str]
     """营养分析"""
     nutrient: str
     """百分比数据"""
@@ -79,9 +92,18 @@ class Request:
     """安全性分析"""
     safety: str
     """标签"""
-    tags: List[str]
+    tags: list[str]
 
-    def __init__(self, additive: List[str], ingredient: List[str], nutrient: str, percent_data: PercentData, percentage: bool, safety: str, tags: List[str]) -> None:
+    def __init__(
+        self,
+        additive: list[str],
+        ingredient: list[str],
+        nutrient: str,
+        percent_data: PercentData,
+        percentage: bool,
+        safety: str,
+        tags: list[str],
+    ) -> None:
         self.additive = additive
         self.ingredient = ingredient
         self.nutrient = nutrient
@@ -89,6 +111,7 @@ class Request:
         self.percentage = percentage
         self.safety = safety
         self.tags = tags
+
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
@@ -219,7 +242,7 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
                 others=None,
             ),
         )
-        resp={
+        resp = {
             "additive": result.additive,
             "ingredient": result.ingredient,
             "nutrient": result.nutrient,
@@ -275,7 +298,6 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         except Exception:
             return None
 
-
     def _to_str_list(v):
         """Coerce various shapes into a list of stripped strings.
 
@@ -313,28 +335,25 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         return [str(v).strip()]
 
     schema = Request(
-            tags=[],
-            additive=[],
-            ingredient=[],
-            nutrient="",
-            safety="",
-            percentage=False,
-            percent_data=PercentData(
-                carbohydrates=None,
-                crude_ash=None,
-                crude_fat=None,
-                crude_fiber=None,
-                crude_protein=None,
-                others=None,
-            ),
-        )
+        tags=[],
+        additive=[],
+        ingredient=[],
+        nutrient="",
+        safety="",
+        percentage=False,
+        percent_data=PercentData(
+            carbohydrates=None,
+            crude_ash=None,
+            crude_fat=None,
+            crude_fiber=None,
+            crude_protein=None,
+            others=None,
+        ),
+    )
 
     if isinstance(parsed, dict):
         # Extract tags
-        raw_tags = (
-            parsed.get("tags")
-            or parsed.get("product_tags")
-        )
+        raw_tags = parsed.get("tags") or parsed.get("product_tags")
         # possible tags:幼猫粮，成猫粮，全价猫粮，无谷，高蛋白，泌尿健康，养毛护肤，呵护肠胃，增肥发腮，高含肉量
         schema.tags = _to_str_list(raw_tags)
         for tag in schema.tags:
@@ -383,10 +402,16 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
             except Exception:
                 schema.percentage = False
 
-        schema.percent_data.crude_protein = _to_number(parsed.get("crude_protein") or parsed.get("protein"))
+        schema.percent_data.crude_protein = _to_number(
+            parsed.get("crude_protein") or parsed.get("protein")
+        )
         schema.percent_data.crude_fat = _to_number(parsed.get("crude_fat") or parsed.get("fat"))
-        schema.percent_data.carbohydrates = _to_number(parsed.get("carbohydrates") or parsed.get("carb"))
-        schema.percent_data.crude_fiber = _to_number(parsed.get("crude_fiber") or parsed.get("fiber"))
+        schema.percent_data.carbohydrates = _to_number(
+            parsed.get("carbohydrates") or parsed.get("carb")
+        )
+        schema.percent_data.crude_fiber = _to_number(
+            parsed.get("crude_fiber") or parsed.get("fiber")
+        )
         schema.percent_data.crude_ash = _to_number(parsed.get("crude_ash") or parsed.get("ash"))
         # others=100-sum(known)
         schema.percent_data.others = 100 - sum(
@@ -405,7 +430,7 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         # If no structured JSON, do NOT include model's free-form text to avoid leaking reasoning.
         pass
 
-    resp={
+    resp = {
         "additive": schema.additive,
         "ingredient": schema.ingredient,
         "nutrient": schema.nutrient,
@@ -428,23 +453,24 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
 # 新增的报告管理API
 
 from django.shortcuts import get_object_or_404
+from rest_framework import status as http_status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
-from rest_framework import status as http_status
 
 from catfood.models import CatFood
+
 from .models import AIAnalysisReport
-from .serializers import AIAnalysisReportSerializer, AIAnalysisReportCreateSerializer
+from .serializers import AIAnalysisReportCreateSerializer, AIAnalysisReportSerializer
 
 
-@api_view(['POST'])
+@api_view(["POST"])
 @permission_classes([AllowAny])
 def save_report(request):
     """
     保存AI分析报告到数据库
     POST /api/ai-report/save/
-    
+
     请求体示例:
     {
         "catfood_id": 1,
@@ -463,41 +489,42 @@ def save_report(request):
         "others": 11.0
     }
     """
-    catfood_id = request.data.get('catfood_id')
-    
+    catfood_id = request.data.get("catfood_id")
+
     if not catfood_id:
-        return Response(
-            {'error': '缺少 catfood_id 参数'},
-            status=http_status.HTTP_400_BAD_REQUEST
-        )
-    
+        return Response({"error": "缺少 catfood_id 参数"}, status=http_status.HTTP_400_BAD_REQUEST)
+
     # 检查猫粮是否存在
     try:
         catfood = CatFood.objects.get(id=catfood_id)
     except CatFood.DoesNotExist:
         return Response(
-            {'error': f'猫粮 ID {catfood_id} 不存在'},
-            status=http_status.HTTP_404_NOT_FOUND
+            {"error": f"猫粮 ID {catfood_id} 不存在"}, status=http_status.HTTP_404_NOT_FOUND
         )
-    
+
     # 准备数据
     report_data = {
-        'catfood': catfood.id,
-        'ingredients_text': request.data.get('ingredients_text', ''),
-        'tags': request.data.get('tags', []),
-        'additives': request.data.get('additives', []),
-        'ingredients': request.data.get('ingredients', []),
-        'safety': request.data.get('safety', ''),
-        'nutrient': request.data.get('nutrient', ''),
-        'percentage': request.data.get('percentage', False),
-        'crude_protein': request.data.get('percent_data', {}).get('crude_protein') or request.data.get('crude_protein'),
-        'crude_fat': request.data.get('percent_data', {}).get('crude_fat') or request.data.get('crude_fat'),
-        'carbohydrates': request.data.get('percent_data', {}).get('carbohydrates') or request.data.get('carbohydrates'),
-        'crude_fiber': request.data.get('percent_data', {}).get('crude_fiber') or request.data.get('crude_fiber'),
-        'crude_ash': request.data.get('percent_data', {}).get('crude_ash') or request.data.get('crude_ash'),
-        'others': request.data.get('percent_data', {}).get('others') or request.data.get('others'),
+        "catfood": catfood.id,
+        "ingredients_text": request.data.get("ingredients_text", ""),
+        "tags": request.data.get("tags", []),
+        "additives": request.data.get("additives", []),
+        "ingredients": request.data.get("ingredients", []),
+        "safety": request.data.get("safety", ""),
+        "nutrient": request.data.get("nutrient", ""),
+        "percentage": request.data.get("percentage", False),
+        "crude_protein": request.data.get("percent_data", {}).get("crude_protein")
+        or request.data.get("crude_protein"),
+        "crude_fat": request.data.get("percent_data", {}).get("crude_fat")
+        or request.data.get("crude_fat"),
+        "carbohydrates": request.data.get("percent_data", {}).get("carbohydrates")
+        or request.data.get("carbohydrates"),
+        "crude_fiber": request.data.get("percent_data", {}).get("crude_fiber")
+        or request.data.get("crude_fiber"),
+        "crude_ash": request.data.get("percent_data", {}).get("crude_ash")
+        or request.data.get("crude_ash"),
+        "others": request.data.get("percent_data", {}).get("others") or request.data.get("others"),
     }
-    
+
     # 检查是否已存在报告
     try:
         existing_report = AIAnalysisReport.objects.get(catfood=catfood)
@@ -506,10 +533,10 @@ def save_report(request):
         if serializer.is_valid():
             serializer.save()
             response_serializer = AIAnalysisReportSerializer(serializer.instance)
-            return Response({
-                'message': '报告更新成功',
-                'report': response_serializer.data
-            }, status=http_status.HTTP_200_OK)
+            return Response(
+                {"message": "报告更新成功", "report": response_serializer.data},
+                status=http_status.HTTP_200_OK,
+            )
         return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
     except AIAnalysisReport.DoesNotExist:
         # 创建新报告
@@ -517,20 +544,20 @@ def save_report(request):
         if serializer.is_valid():
             serializer.save()
             response_serializer = AIAnalysisReportSerializer(serializer.instance)
-            return Response({
-                'message': '报告保存成功',
-                'report': response_serializer.data
-            }, status=http_status.HTTP_201_CREATED)
+            return Response(
+                {"message": "报告保存成功", "report": response_serializer.data},
+                status=http_status.HTTP_201_CREATED,
+            )
         return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([AllowAny])
 def get_report(request, catfood_id):
     """
     获取指定猫粮的AI分析报告
     GET /api/ai-report/{catfood_id}/
-    
+
     返回示例:
     {
         "id": 1,
@@ -550,7 +577,7 @@ def get_report(request, catfood_id):
     """
     # 检查猫粮是否存在
     catfood = get_object_or_404(CatFood, id=catfood_id)
-    
+
     # 获取报告
     try:
         report = AIAnalysisReport.objects.get(catfood=catfood)
@@ -559,15 +586,15 @@ def get_report(request, catfood_id):
     except AIAnalysisReport.DoesNotExist:
         return Response(
             {
-                'error': '该猫粮暂无AI分析报告',
-                'catfood_id': catfood_id,
-                'catfood_name': catfood.name
+                "error": "该猫粮暂无AI分析报告",
+                "catfood_id": catfood_id,
+                "catfood_name": catfood.name,
             },
-            status=http_status.HTTP_404_NOT_FOUND
+            status=http_status.HTTP_404_NOT_FOUND,
         )
 
 
-@api_view(['DELETE'])
+@api_view(["DELETE"])
 @permission_classes([AllowAny])
 def delete_report(request, catfood_id):
     """
@@ -575,28 +602,22 @@ def delete_report(request, catfood_id):
     DELETE /api/ai-report/{catfood_id}/
     """
     catfood = get_object_or_404(CatFood, id=catfood_id)
-    
+
     try:
         report = AIAnalysisReport.objects.get(catfood=catfood)
         report.delete()
-        return Response(
-            {'message': '报告删除成功，可以重新生成'},
-            status=http_status.HTTP_200_OK
-        )
+        return Response({"message": "报告删除成功，可以重新生成"}, status=http_status.HTTP_200_OK)
     except AIAnalysisReport.DoesNotExist:
-        return Response(
-            {'error': '该猫粮没有分析报告'},
-            status=http_status.HTTP_404_NOT_FOUND
-        )
+        return Response({"error": "该猫粮没有分析报告"}, status=http_status.HTTP_404_NOT_FOUND)
 
 
-@api_view(['GET'])
+@api_view(["GET"])
 @permission_classes([AllowAny])
 def check_report_exists(request, catfood_id):
     """
     检查指定猫粮是否已有AI分析报告
-    GET /api/ai-report/{catfood_id}/exists/
-    
+    GET /api/ai/{catfood_id}/exists/
+
     返回示例:
     {
         "exists": true,
@@ -604,18 +625,30 @@ def check_report_exists(request, catfood_id):
         "updated_at": "2025-01-01T00:00:00Z"
     }
     """
-    catfood = get_object_or_404(CatFood, id=catfood_id)
-    
+    # 检查猫粮是否存在
+    try:
+        catfood = CatFood.objects.get(id=catfood_id)
+    except CatFood.DoesNotExist:
+        return Response(
+            {"error": f"猫粮 ID {catfood_id} 不存在", "exists": False, "catfood_id": catfood_id},
+            status=http_status.HTTP_404_NOT_FOUND,
+        )
+
+    # 检查报告是否存在
     try:
         report = AIAnalysisReport.objects.get(catfood=catfood)
-        return Response({
-            'exists': True,
-            'catfood_id': catfood_id,
-            'report_id': report.id,
-            'updated_at': report.updated_at
-        }, status=http_status.HTTP_200_OK)
+        return Response(
+            {
+                "exists": True,
+                "catfood_id": catfood_id,
+                "catfood_name": catfood.name,
+                "report_id": report.id,
+                "updated_at": report.updated_at,
+            },
+            status=http_status.HTTP_200_OK,
+        )
     except AIAnalysisReport.DoesNotExist:
-        return Response({
-            'exists': False,
-            'catfood_id': catfood_id
-        }, status=http_status.HTTP_200_OK)
+        return Response(
+            {"exists": False, "catfood_id": catfood_id, "catfood_name": catfood.name},
+            status=http_status.HTTP_200_OK,
+        )
