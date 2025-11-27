@@ -43,11 +43,12 @@ class UserSerializer(serializers.ModelSerializer):
     """用户序列化器 - 完整的用户信息（包含头像和宠物）"""
 
     avatar = serializers.SerializerMethodField()
+    is_admin = serializers.SerializerMethodField()
     pets = PetSerializer(many=True, read_only=True)
 
     class Meta:
         model = User
-        fields = ["id", "username", "avatar", "pets"]
+        fields = ["id", "username", "avatar", "is_admin", "pets"]
         read_only_fields = ["id"]
 
     def get_avatar(self, obj):
@@ -61,6 +62,13 @@ class UserSerializer(serializers.ModelSerializer):
         except UserProfile.DoesNotExist:
             pass
         return None
+
+    def get_is_admin(self, obj):
+        """获取用户管理员状态"""
+        try:
+            return obj.profile.is_admin if obj.profile else False
+        except UserProfile.DoesNotExist:
+            return False
 
 
 class AvatarUploadSerializer(serializers.Serializer):

@@ -431,6 +431,10 @@ def save_report(request):
     保存AI分析报告到数据库
     POST /api/ai/save/
 
+    权限说明:
+    - 普通用户: 仅能为没有营养成分信息的猫粮保存报告
+    - 管理员用户: 可以覆盖更新已有营养成分信息的猫粮报告
+
     请求体示例:
     {
         "catfood_id": 1,
@@ -480,18 +484,40 @@ def save_report(request):
     # 检查是否已存在报告
     try:
         existing_report = AIAnalysisReport.objects.get(catfood=catfood)
-        # 更新现有报告
+
+        # 权限检查：只有管理员可以更新已有报告
+        is_admin = False
+        if request.user and not isinstance(request.user, AnonymousUser):
+            try:
+                is_admin = request.user.profile.is_admin
+            except Exception:
+                is_admin = False
+
+        if not is_admin:
+            return Response(
+                {
+                    "error": "该猫粮已有营养成分信息，只有管理员可以更新",
+                    "message": "普通用户无权覆盖已有的营养成分数据。如需更新，请联系管理员。",
+                    "existing_report_id": existing_report.id,
+                },
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        # 管理员更新现有报告
         serializer = AIAnalysisReportCreateSerializer(existing_report, data=report_data)
         if serializer.is_valid():
             serializer.save()
             response_serializer = AIAnalysisReportSerializer(serializer.instance)
             return Response(
-                {"message": "报告更新成功", "report": response_serializer.data},
+                {
+                    "message": "报告更新成功（管理员权限）",
+                    "report": response_serializer.data,
+                },
                 status=http_status.HTTP_200_OK,
             )
         return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
     except AIAnalysisReport.DoesNotExist:
-        # 创建新报告
+        # 创建新报告（所有用户均可）
         serializer = AIAnalysisReportCreateSerializer(data=report_data)
         if serializer.is_valid():
             serializer.save()
