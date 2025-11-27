@@ -48,35 +48,7 @@ def _post_json(url: str, data: dict, headers: dict, timeout: int = 120) -> tuple
     except Exception as e:  # pragma: no cover
         return 0, str(e)
 
-
-from typing import List, Optional
-
-
-class PercentData:
-    """百分比数据"""
-
-    carbohydrates: float | None
-    crude_ash: float | None
-    crude_fat: float | None
-    crude_fiber: float | None
-    crude_protein: float | None
-    others: float | None
-
-    def __init__(
-        self,
-        carbohydrates: float | None,
-        crude_ash: float | None,
-        crude_fat: float | None,
-        crude_fiber: float | None,
-        crude_protein: float | None,
-        others: float | None,
-    ) -> None:
-        self.carbohydrates = carbohydrates
-        self.crude_ash = crude_ash
-        self.crude_fat = crude_fat
-        self.crude_fiber = crude_fiber
-        self.crude_protein = crude_protein
-        self.others = others
+from typing import Optional, List
 
 
 class Request:
@@ -87,7 +59,7 @@ class Request:
     """营养分析"""
     nutrient: str
     """百分比数据"""
-    percent_data: PercentData
+    percent_data: None
     """是否支持百分比分析"""
     percentage: bool
     """安全性分析"""
@@ -95,16 +67,7 @@ class Request:
     """标签"""
     tags: list[str]
 
-    def __init__(
-        self,
-        additive: list[str],
-        ingredient: list[str],
-        nutrient: str,
-        percent_data: PercentData,
-        percentage: bool,
-        safety: str,
-        tags: list[str],
-    ) -> None:
+    def __init__(self, additive: List[str], ingredient: List[str], nutrient: str, percent_data: None, percentage: bool, safety: str, tags: List[str]) -> None:
         self.additive = additive
         self.ingredient = ingredient
         self.nutrient = nutrient
@@ -180,7 +143,7 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         "  - safety（string，必填，大约50个汉字的针对猫粮的简要安全性分析，重点关注添加剂）；\n"
         "  - nutrient（string，必填，大约300个汉字的针对猫粮的简要营养分析）；\n"
         "  - percentage（boolean/null，可选，如果你能分析出以下各成分占比，请在此处填True，否则填False。尽可能分析！）；\n"
-        "  - crude_protein、crude_fat、carbohydrates、crude_fiber、crude_ash、others（number，可选，各相应成分百分比。如果能分析占比，percentage=True，需要把每一个比例都填上。没有填0.）。\n"
+        "  - percent_data（dict,以营养成分英文名作为字段名，例如\"carbohydrates\"，值为number,各相应成分百分比。如果能分析占比，percentage=True。如果percentage=True，一定要有一个字段是others，代表其他成分的百分比。所有含量之和应为100）\n"
         "- 数值字段无法判断时返回 null；数组字段无法判断或无识别结果时返回空数组。\n"
         "- 禁止输出推理过程或步骤说明，只保留结论性短句或最终的 JSON 字段内容。\n"
     )
@@ -234,27 +197,13 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
             nutrient="",
             safety="",
             percentage=False,
-            percent_data=PercentData(
-                carbohydrates=None,
-                crude_ash=None,
-                crude_fat=None,
-                crude_fiber=None,
-                crude_protein=None,
-                others=None,
-            ),
+            percent_data=None,
         )
         resp = {
             "additive": result.additive,
             "ingredient": result.ingredient,
             "nutrient": result.nutrient,
-            "percent_data": {
-                "carbohydrates": result.percent_data.carbohydrates,
-                "crude_ash": result.percent_data.crude_ash,
-                "crude_fat": result.percent_data.crude_fat,
-                "crude_fiber": result.percent_data.crude_fiber,
-                "crude_protein": result.percent_data.crude_protein,
-                "others": result.percent_data.others,
-            },
+            "percent_data": result.percent_data,
             "percentage": result.percentage,
             "safety": result.safety,
             "tags": result.tags,
@@ -288,16 +237,6 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
                     parsed = json.loads(extracted_text[s : e + 1])
                 except Exception:
                     parsed = None
-
-    def _to_number(v):
-        if v is None:
-            return None
-        if isinstance(v, int | float):
-            return float(v)
-        try:
-            return float(str(v).strip())
-        except Exception:
-            return None
 
     def _to_str_list(v):
         """Coerce various shapes into a list of stripped strings.
@@ -336,21 +275,14 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         return [str(v).strip()]
 
     schema = Request(
-        tags=[],
-        additive=[],
-        ingredient=[],
-        nutrient="",
-        safety="",
-        percentage=False,
-        percent_data=PercentData(
-            carbohydrates=None,
-            crude_ash=None,
-            crude_fat=None,
-            crude_fiber=None,
-            crude_protein=None,
-            others=None,
-        ),
-    )
+            tags=[],
+            additive=[],
+            ingredient=[],
+            nutrient="",
+            safety="",
+            percentage=False,
+            percent_data=None,
+        )
 
     if isinstance(parsed, dict):
         # Extract tags
@@ -403,46 +335,30 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
             except Exception:
                 schema.percentage = False
 
-        schema.percent_data.crude_protein = _to_number(
-            parsed.get("crude_protein") or parsed.get("protein")
-        )
-        schema.percent_data.crude_fat = _to_number(parsed.get("crude_fat") or parsed.get("fat"))
-        schema.percent_data.carbohydrates = _to_number(
-            parsed.get("carbohydrates") or parsed.get("carb")
-        )
-        schema.percent_data.crude_fiber = _to_number(
-            parsed.get("crude_fiber") or parsed.get("fiber")
-        )
-        schema.percent_data.crude_ash = _to_number(parsed.get("crude_ash") or parsed.get("ash"))
-        # others=100-sum(known)
-        schema.percent_data.others = 100 - sum(
-            filter(
-                None,
-                [
-                    schema.percent_data.crude_protein,
-                    schema.percent_data.crude_fat,
-                    schema.percent_data.carbohydrates,
-                    schema.percent_data.crude_fiber,
-                    schema.percent_data.crude_ash,
-                ],
-            )
-        )
+        # percent_data
+        schema.percent_data = parsed.get("percent_data") or parsed.get("percentage_data") or {}
+        # make sure percent_data has correct form
+        if(not isinstance(schema.percent_data, dict)):
+            schema.percent_data = {}
+        # make sure sum=100
+        if schema.percentage and schema.percent_data:
+                total = sum(v for v in schema.percent_data.values() if isinstance(v, (int, float)))
+                if 0 < total < 100:
+                    schema.percent_data["others"] = 100 - total
+
+            # make sure "percentage" is False if there is no percent_data(only has others=100)
+        if not schema.percent_data or len(schema.percent_data) <= 1:
+            schema.percentage = False
     else:
         # If no structured JSON, do NOT include model's free-form text to avoid leaking reasoning.
         pass
 
-    resp = {
+
+    resp={
         "additive": schema.additive,
         "ingredient": schema.ingredient,
         "nutrient": schema.nutrient,
-        "percent_data": {
-            "carbohydrates": schema.percent_data.carbohydrates,
-            "crude_ash": schema.percent_data.crude_ash,
-            "crude_fat": schema.percent_data.crude_fat,
-            "crude_fiber": schema.percent_data.crude_fiber,
-            "crude_protein": schema.percent_data.crude_protein,
-            "others": schema.percent_data.others,
-        },
+        "percent_data": schema.percent_data,
         "percentage": schema.percentage,
         "safety": schema.safety,
         "tags": schema.tags,
