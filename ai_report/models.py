@@ -42,28 +42,11 @@ class AIAnalysisReport(models.Model):
     # 分析结果 - 百分比分析
     percentage = models.BooleanField(default=False, help_text="是否支持百分比分析")
 
-    crude_protein = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="粗蛋白含量（%）"
-    )
-
-    crude_fat = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="粗脂肪含量（%）"
-    )
-
-    carbohydrates = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="碳水化合物含量（%）"
-    )
-
-    crude_fiber = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="粗纤维含量（%）"
-    )
-
-    crude_ash = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="粗灰分含量（%）"
-    )
-
-    others = models.DecimalField(
-        max_digits=5, decimal_places=2, null=True, blank=True, help_text="其他成分含量（%）"
+    # 动态百分比数据（支持任意营养成分字段）
+    percent_data = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="营养成分百分比数据（动态字段，如 protein, fat, fiber, ash, moisture, carbohydrates, others 等）",
     )
 
     # 元数据
