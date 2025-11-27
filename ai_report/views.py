@@ -294,6 +294,16 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         percent_data=None,
     )
 
+    print("=" * 80)
+    print("🔍 [LLM] Parsing structured response...")
+    print(f"🔍 [LLM] Type of parsed: {type(parsed)}")
+    print(f"🔍 [LLM] Is dict: {isinstance(parsed, dict)}")
+    if isinstance(parsed, dict):
+        print(f"🔍 [LLM] Keys in parsed dict: {list(parsed.keys())}")
+        print("🔍 [LLM] Full parsed content:")
+        print(json.dumps(parsed, indent=2, ensure_ascii=False))
+    print("=" * 80)
+
     if isinstance(parsed, dict):
         # Extract tags
         raw_tags = parsed.get("tags") or parsed.get("product_tags")
@@ -346,19 +356,39 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
                 schema.percentage = False
 
         # percent_data
-        schema.percent_data = parsed.get("percent_data") or parsed.get("percentage_data") or {}
+        raw_percent_data = parsed.get("percent_data") or parsed.get("percentage_data") or {}
+        print(f"🔍 [LLM Response] Raw percent_data from LLM: {raw_percent_data}")
+        print(f"🔍 [LLM Response] Type: {type(raw_percent_data)}")
+
+        schema.percent_data = raw_percent_data
         # make sure percent_data has correct form
         if not isinstance(schema.percent_data, dict):
+            print("⚠️ [LLM Response] percent_data is not dict, converting to empty dict")
             schema.percent_data = {}
+
+        print(f"🔍 [LLM Response] After validation, percent_data: {schema.percent_data}")
+        print(f"🔍 [LLM Response] Keys count: {len(schema.percent_data)}")
+
         # make sure sum=100
         if schema.percentage and schema.percent_data:
             total = sum(v for v in schema.percent_data.values() if isinstance(v, (int, float)))
+            print(f"🔍 [LLM Response] Total percentage: {total}")
             if 0 < total < 100:
                 schema.percent_data["others"] = 100 - total
+                print(f"✅ [LLM Response] Added 'others': {100 - total}")
 
         # make sure "percentage" is False if there is no percent_data(only has others=100)
         if not schema.percent_data or len(schema.percent_data) <= 1:
+            print("⚠️ [LLM Response] No valid percent_data, setting percentage to False")
+            print(f"   - percent_data empty: {not schema.percent_data}")
+            print(
+                f"   - percent_data keys: {list(schema.percent_data.keys()) if schema.percent_data else []}"
+            )
             schema.percentage = False
+        else:
+            print(
+                f"✅ [LLM Response] Valid percent_data found with {len(schema.percent_data)} fields"
+            )
     else:
         # If no structured JSON, do NOT include model's free-form text to avoid leaking reasoning.
         pass
