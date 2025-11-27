@@ -621,7 +621,7 @@ def delete_report(request, catfood_id):
 def check_report_exists(request, catfood_id):
     """
     检查指定猫粮是否已有AI分析报告
-    GET /api/ai/{catfood_id}/exists/
+    GET /api/ai-report/{catfood_id}/exists/
 
     返回示例:
     {
@@ -630,23 +630,14 @@ def check_report_exists(request, catfood_id):
         "updated_at": "2025-01-01T00:00:00Z"
     }
     """
-    # 检查猫粮是否存在
-    try:
-        catfood = CatFood.objects.get(id=catfood_id)
-    except CatFood.DoesNotExist:
-        return Response(
-            {"error": f"猫粮 ID {catfood_id} 不存在", "exists": False, "catfood_id": catfood_id},
-            status=http_status.HTTP_404_NOT_FOUND,
-        )
+    catfood = get_object_or_404(CatFood, id=catfood_id)
 
-    # 检查报告是否存在
     try:
         report = AIAnalysisReport.objects.get(catfood=catfood)
         return Response(
             {
                 "exists": True,
                 "catfood_id": catfood_id,
-                "catfood_name": catfood.name,
                 "report_id": report.id,
                 "updated_at": report.updated_at,
             },
