@@ -16,6 +16,13 @@ class CatFood(models.Model):
     # 基本信息
     name = models.CharField(max_length=200, help_text="猫粮名称")
     brand = models.CharField(max_length=100, blank=True, help_text="品牌名称")
+    barcode = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="商品条形码（EAN-13/UPC等）",
+    )
 
     # 图片
     image_url = models.URLField(blank=True, null=True, help_text="猫粮图片URL")
@@ -92,6 +99,7 @@ class CatFood(models.Model):
         indexes = [
             models.Index(fields=["name"]),
             models.Index(fields=["brand"]),
+            models.Index(fields=["barcode"]),
             models.Index(fields=["-score"]),
         ]
 

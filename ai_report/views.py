@@ -294,6 +294,16 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         percent_data=None,
     )
 
+    print("=" * 80)
+    print("🔍 [LLM] Parsing structured response...")
+    print(f"🔍 [LLM] Type of parsed: {type(parsed)}")
+    print(f"🔍 [LLM] Is dict: {isinstance(parsed, dict)}")
+    if isinstance(parsed, dict):
+        print(f"🔍 [LLM] Keys in parsed dict: {list(parsed.keys())}")
+        print("🔍 [LLM] Full parsed content:")
+        print(json.dumps(parsed, indent=2, ensure_ascii=False))
+    print("=" * 80)
+
     if isinstance(parsed, dict):
         # Extract tags
         raw_tags = parsed.get("tags") or parsed.get("product_tags")
@@ -346,19 +356,39 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
                 schema.percentage = False
 
         # percent_data
-        schema.percent_data = parsed.get("percent_data") or parsed.get("percentage_data") or {}
+        raw_percent_data = parsed.get("percent_data") or parsed.get("percentage_data") or {}
+        print(f"🔍 [LLM Response] Raw percent_data from LLM: {raw_percent_data}")
+        print(f"🔍 [LLM Response] Type: {type(raw_percent_data)}")
+
+        schema.percent_data = raw_percent_data
         # make sure percent_data has correct form
         if not isinstance(schema.percent_data, dict):
+            print("⚠️ [LLM Response] percent_data is not dict, converting to empty dict")
             schema.percent_data = {}
+
+        print(f"🔍 [LLM Response] After validation, percent_data: {schema.percent_data}")
+        print(f"🔍 [LLM Response] Keys count: {len(schema.percent_data)}")
+
         # make sure sum=100
         if schema.percentage and schema.percent_data:
             total = sum(v for v in schema.percent_data.values() if isinstance(v, (int, float)))
+            print(f"🔍 [LLM Response] Total percentage: {total}")
             if 0 < total < 100:
                 schema.percent_data["others"] = 100 - total
+                print(f"✅ [LLM Response] Added 'others': {100 - total}")
 
         # make sure "percentage" is False if there is no percent_data(only has others=100)
         if not schema.percent_data or len(schema.percent_data) <= 1:
+            print("⚠️ [LLM Response] No valid percent_data, setting percentage to False")
+            print(f"   - percent_data empty: {not schema.percent_data}")
+            print(
+                f"   - percent_data keys: {list(schema.percent_data.keys()) if schema.percent_data else []}"
+            )
             schema.percentage = False
+        else:
+            print(
+                f"✅ [LLM Response] Valid percent_data found with {len(schema.percent_data)} fields"
+            )
     else:
         # If no structured JSON, do NOT include model's free-form text to avoid leaking reasoning.
         pass
@@ -400,6 +430,10 @@ def save_report(request):
     """
     保存AI分析报告到数据库
     POST /api/ai/save/
+
+    权限说明:
+    - 普通用户: 仅能为没有营养成分信息的猫粮保存报告
+    - 管理员用户: 可以覆盖更新已有营养成分信息的猫粮报告
 
     请求体示例:
     {
@@ -450,18 +484,40 @@ def save_report(request):
     # 检查是否已存在报告
     try:
         existing_report = AIAnalysisReport.objects.get(catfood=catfood)
-        # 更新现有报告
+
+        # 权限检查：只有管理员可以更新已有报告
+        is_admin = False
+        if request.user and not isinstance(request.user, AnonymousUser):
+            try:
+                is_admin = request.user.profile.is_admin
+            except Exception:
+                is_admin = False
+
+        if not is_admin:
+            return Response(
+                {
+                    "error": "该猫粮已有营养成分信息，只有管理员可以更新",
+                    "message": "普通用户无权覆盖已有的营养成分数据。如需更新，请联系管理员。",
+                    "existing_report_id": existing_report.id,
+                },
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        # 管理员更新现有报告
         serializer = AIAnalysisReportCreateSerializer(existing_report, data=report_data)
         if serializer.is_valid():
             serializer.save()
             response_serializer = AIAnalysisReportSerializer(serializer.instance)
             return Response(
-                {"message": "报告更新成功", "report": response_serializer.data},
+                {
+                    "message": "报告更新成功（管理员权限）",
+                    "report": response_serializer.data,
+                },
                 status=http_status.HTTP_200_OK,
             )
         return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
     except AIAnalysisReport.DoesNotExist:
-        # 创建新报告
+        # 创建新报告（所有用户均可）
         serializer = AIAnalysisReportCreateSerializer(data=report_data)
         if serializer.is_valid():
             serializer.save()
