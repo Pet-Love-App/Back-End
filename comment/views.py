@@ -43,6 +43,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         """
         获取评论列表
         支持按 target_type、target_id、author_id 和 my 过滤
+        支持排序：likes（按赞数）、latest（最新，默认）
         """
         queryset = self.filter_queryset(self.get_queryset())
 
