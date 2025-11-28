@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     "ai_report",
     "ocr",  # OCR 识别
     "catfood",  # 猫粮管理
+    "forum",  # 论坛系统（帖子、通知）
     "comment",  # 评论系统
     "corsheaders",  # CORS 支持
     "django.contrib.admin",

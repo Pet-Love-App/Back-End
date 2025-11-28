@@ -1,17 +1,11 @@
 """
-评论系统序列化器 + 帖子/通知
+评论系统序列化器
 """
 
 from django.contrib.auth.models import User
 from rest_framework import serializers
 
-from .models import Comment, CommentLike, Post, PostMedia, Favorite, Notification
-
-
-class UserSimpleSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ["id", "username"]
+from .models import Comment, CommentLike
 
 
 class CommentAuthorSerializer(serializers.ModelSerializer):
@@ -77,7 +71,9 @@ class CommentCreateSerializer(serializers.ModelSerializer):
     """创建评论序列化器"""
 
     targetId = serializers.IntegerField(source="target_id", required=True)
-    targetType = serializers.ChoiceField(source="target_type", choices=["post", "catfood", "report"], required=True)
+    targetType = serializers.ChoiceField(
+        source="target_type", choices=["post", "catfood", "report"], required=True
+    )
     parentId = serializers.IntegerField(source="parent.id", required=False, allow_null=True)
 
     class Meta:
@@ -87,17 +83,25 @@ class CommentCreateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         target_type = data.get("target_type")
         target_id = data.get("target_id")
+
+        # 验证目标对象是否存在
         if target_type == "catfood":
             from catfood.models import CatFood
+
             if not CatFood.objects.filter(id=target_id).exists():
                 raise serializers.ValidationError({"targetId": f"ID为{target_id}的猫粮不存在"})
         elif target_type == "post":
+            from forum.models import Post
+
             if not Post.objects.filter(id=target_id).exists():
                 raise serializers.ValidationError({"targetId": f"ID为{target_id}的帖子不存在"})
         elif target_type == "report":
             from ai_report.models import Report
+
             if not Report.objects.filter(id=target_id).exists():
                 raise serializers.ValidationError({"targetId": f"ID为{target_id}的报告不存在"})
+
+        # 验证父评论是否存在
         parent_id = self.initial_data.get("parentId")
         if parent_id:
             try:
@@ -105,21 +109,64 @@ class CommentCreateSerializer(serializers.ModelSerializer):
                 data["parent"] = parent_obj
             except Comment.DoesNotExist:
                 raise serializers.ValidationError({"parentId": "父评论不存在"})
+
         return data
 
     def create(self, validated_data):
         request = self.context.get("request")
         validated_data["author"] = request.user
-        return super().create(validated_data)
+        comment = super().create(validated_data)
+
+        # 如果是对帖子的评论，触发通知
+        if comment.target_type == "post":
+            self._create_post_notification(comment, request.user)
+
+        return comment
+
+    def _create_post_notification(self, comment, user):
+        """为帖子评论创建通知"""
+        try:
+            from forum.models import Notification, Post
+
+            post = Post.objects.filter(id=comment.target_id).first()
+
+            if not post:
+                return
+
+            # 通知帖子作者（排除自己）
+            if post.author != user:
+                Notification.objects.create(
+                    recipient=post.author,
+                    actor=user,
+                    verb="comment_post" if not comment.parent else "reply_comment",
+                    post=post,
+                    comment=comment,
+                )
+
+            # 回复评论 -> 通知父评论作者（排除自己）
+            if comment.parent and comment.parent.author != user:
+                Notification.objects.create(
+                    recipient=comment.parent.author,
+                    actor=user,
+                    verb="reply_comment",
+                    post=post,
+                    comment=comment,
+                )
+        except Exception:
+            pass
 
 
 class CommentUpdateSerializer(serializers.ModelSerializer):
+    """更新评论序列化器"""
+
     class Meta:
         model = Comment
         fields = ["content"]
 
 
 class CommentLikeSerializer(serializers.Serializer):
+    """评论点赞序列化器"""
+
     comment_id = serializers.IntegerField()
 
     def validate_comment_id(self, value):
@@ -134,86 +181,17 @@ class CommentLikeSerializer(serializers.Serializer):
         comment_id = validated_data["comment_id"]
         comment = Comment.objects.get(id=comment_id)
         user = request.user
+
         like_record = CommentLike.objects.filter(comment=comment, user=user).first()
         if like_record:
+            # 取消点赞
             like_record.delete()
             comment.likes = max(0, comment.likes - 1)
             comment.save(update_fields=["likes"])
             return {"action": "unliked", "likes": comment.likes}
         else:
+            # 点赞
             CommentLike.objects.create(comment=comment, user=user)
             comment.likes += 1
             comment.save(update_fields=["likes"])
             return {"action": "liked", "likes": comment.likes}
-
-
-class PostMediaSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = PostMedia
-        fields = ["id", "media_type", "file", "created_at"]
-        read_only_fields = ["id", "media_type", "created_at"]
-
-
-class PostSerializer(serializers.ModelSerializer):
-    media = PostMediaSerializer(many=True, read_only=True)
-    favorites_count = serializers.SerializerMethodField()
-    is_favorited = serializers.SerializerMethodField()
-    author = UserSimpleSerializer(read_only=True)
-
-    class Meta:
-        model = Post
-        fields = ["id", "author", "content", "media", "favorites_count", "is_favorited", "created_at", "updated_at"]
-        read_only_fields = ["id", "author", "favorites_count", "is_favorited", "created_at", "updated_at"]
-
-    def get_favorites_count(self, obj):
-        return obj.favorites.count()
-
-    def get_is_favorited(self, obj):
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            return obj.favorites.filter(user=request.user).exists()
-        return False
-
-
-class PostCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Post
-        fields = ["content"]
-
-    def create(self, validated_data):
-        request = self.context.get("request")
-        post = Post.objects.create(author=request.user, **validated_data)
-        files = request.FILES.getlist("media")
-        for f in files:
-            ct = getattr(f, "content_type", "") or ""
-            media_type = PostMedia.IMAGE if ct.startswith("image/") else PostMedia.VIDEO
-            PostMedia.objects.create(post=post, file=f, media_type=media_type)
-        return post
-
-
-class FavoriteToggleSerializer(serializers.Serializer):
-    post_id = serializers.IntegerField()
-
-    def validate_post_id(self, value):
-        if not Post.objects.filter(id=value).exists():
-            raise serializers.ValidationError("帖子不存在")
-        return value
-
-    def create(self, validated_data):
-        request = self.context.get("request")
-        post = Post.objects.get(id=validated_data["post_id"])
-        fav = Favorite.objects.filter(user=request.user, post=post).first()
-        if fav:
-            fav.delete()
-            return {"action": "unfavorited", "favorites_count": post.favorites.count()}
-        Favorite.objects.create(user=request.user, post=post)
-        return {"action": "favorited", "favorites_count": post.favorites.count()}
-
-
-class NotificationSerializer(serializers.ModelSerializer):
-    actor = UserSimpleSerializer(read_only=True)
-
-    class Meta:
-        model = Notification
-        fields = ["id", "actor", "verb", "post", "comment", "unread", "created_at"]
-        read_only_fields = fields

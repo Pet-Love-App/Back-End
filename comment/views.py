@@ -1,25 +1,19 @@
 """
-评论相关视图 + 帖子/通知/收藏/消息
+评论系统视图
+提供评论的 CRUD 操作 + 点赞功能
 """
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework.response import Response
-from rest_framework.parsers import MultiPartParser, FormParser
-from django.db.models import F
-from django.db.models.functions import Random
 
-from .models import Comment, Post, Favorite, Notification
+from .models import Comment
 from .serializers import (
     CommentCreateSerializer,
     CommentLikeSerializer,
     CommentSerializer,
     CommentUpdateSerializer,
-    PostSerializer,
-    PostCreateSerializer,
-    FavoriteToggleSerializer,
-    NotificationSerializer,
 )
 
 
@@ -49,6 +43,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         """
         获取评论列表
         支持按 target_type 和 target_id 过滤
+        支持排序：likes（按赞数）、latest（最新，默认）
         """
         queryset = self.filter_queryset(self.get_queryset())
 
@@ -81,33 +76,6 @@ class CommentViewSet(viewsets.ModelViewSet):
         self.perform_create(serializer)
 
         response_serializer = CommentSerializer(serializer.instance, context={"request": request})
-
-        # 仅论坛发帖触发通知（target_type == "post"），其它类型不触发
-        try:
-            comment_obj = serializer.instance
-            if comment_obj.target_type == "post":
-                post = Post.objects.filter(id=comment_obj.target_id).first()
-                # 通知帖子作者（排除自己）
-                if post and post.author != request.user:
-                    Notification.objects.create(
-                        recipient=post.author,
-                        actor=request.user,
-                        verb="comment_post" if not comment_obj.parent else "reply_comment",
-                        post=post,
-                        comment=comment_obj,
-                    )
-                # 回复评论 -> 通知父评论作者（排除自己）
-                if comment_obj.parent and comment_obj.parent.author != request.user:
-                    Notification.objects.create(
-                        recipient=comment_obj.parent.author,
-                        actor=request.user,
-                        verb="reply_comment",
-                        post=post,
-                        comment=comment_obj,
-                    )
-        except Exception:
-            pass
-
         headers = self.get_success_headers(response_serializer.data)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
@@ -147,7 +115,9 @@ class CommentViewSet(viewsets.ModelViewSet):
         comment = self.get_object()
 
         # 使用序列化器处理点赞逻辑
-        serializer = CommentLikeSerializer(data={"comment_id": comment.id}, context={"request": request})
+        serializer = CommentLikeSerializer(
+            data={"comment_id": comment.id}, context={"request": request}
+        )
         serializer.is_valid(raise_exception=True)
         result = serializer.save()
 
@@ -156,81 +126,10 @@ class CommentViewSet(viewsets.ModelViewSet):
         response_serializer = CommentSerializer(comment, context={"request": request})
 
         return Response(
-            {"action": result["action"], "likes": result["likes"], "comment": response_serializer.data},
+            {
+                "action": result["action"],
+                "likes": result["likes"],
+                "comment": response_serializer.data,
+            },
             status=status.HTTP_200_OK,
         )
-
-
-class PostViewSet(viewsets.ModelViewSet):
-    """帖子视图：广场随机 / 最新、创建、收藏列表、收藏切换"""
-    queryset = Post.objects.all().order_by("-created_at").select_related("author")
-    permission_classes = [IsAuthenticatedOrReadOnly]
-    parser_classes = [MultiPartParser, FormParser]
-
-    def get_serializer_class(self):
-        if self.action == "create":
-            return PostCreateSerializer
-        return PostSerializer
-
-    def perform_create(self, serializer):
-        serializer.save()
-
-    def list(self, request, *args, **kwargs):
-        order = request.query_params.get("order")  # random | latest
-        qs = self.get_queryset()
-        if order == "random":
-            qs = qs.order_by(Random())
-        else:
-            qs = qs.order_by("-created_at")
-        page = self.paginate_queryset(qs)
-        if page is not None:
-            ser = PostSerializer(page, many=True, context={"request": request})
-            return self.get_paginated_response(ser.data)
-        ser = PostSerializer(qs, many=True, context={"request": request})
-        return Response(ser.data)
-
-    @action(detail=False, methods=["get"], permission_classes=[IsAuthenticated])
-    def favorites(self, request):
-        qs = Post.objects.filter(favorites__user=request.user).order_by("-favorites__created_at")
-        page = self.paginate_queryset(qs)
-        if page is not None:
-            ser = PostSerializer(page, many=True, context={"request": request})
-            return self.get_paginated_response(ser.data)
-        ser = PostSerializer(qs, many=True, context={"request": request})
-        return Response(ser.data)
-
-    @action(detail=True, methods=["post"], permission_classes=[IsAuthenticated])
-    def favorite(self, request, pk=None):
-        post = self.get_object()
-        serializer = FavoriteToggleSerializer(data={"post_id": post.id}, context={"request": request})
-        serializer.is_valid(raise_exception=True)
-        result = serializer.save()
-        return Response(result, status=status.HTTP_200_OK)
-
-
-class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
-    """消息视图：获取未读/全部、标记已读、全部设为已读"""
-    permission_classes = [IsAuthenticated]
-    serializer_class = NotificationSerializer
-
-    def get_queryset(self):
-        qs = Notification.objects.filter(recipient=self.request.user).order_by("-created_at")
-        unread = self.request.query_params.get("unread")
-        if unread == "true":
-            qs = qs.filter(unread=True)
-        return qs
-
-    @action(detail=True, methods=["post"])
-    def read(self, request, pk=None):
-        n = self.get_object()
-        if n.recipient != request.user:
-            return Response(status=status.HTTP_403_FORBIDDEN)
-        if n.unread:
-            n.unread = False
-            n.save(update_fields=["unread"])
-        return Response(status=status.HTTP_204_NO_CONTENT)
-
-    @action(detail=False, methods=["post"])
-    def read_all(self, request):
-        Notification.objects.filter(recipient=request.user, unread=True).update(unread=False)
-        return Response(status=status.HTTP_204_NO_CONTENT)
