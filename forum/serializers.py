@@ -10,7 +10,7 @@ from .models import Favorite, Notification, Post, PostMedia
 
 
 class UserSimpleSerializer(serializers.ModelSerializer):
-   """
+    """
     简单用户信息序列化器
     用于在帖子和通知中显示用户基本信息
     """
