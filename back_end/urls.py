@@ -37,7 +37,9 @@ urlpatterns = [
     # 论坛系统（帖子、通知）
     path("api/forum/", include("forum.urls")),
     # 评论系统
-    path("api/", include("comment.urls")),
+    path("api/comments/", include("comment.urls")),
+    # 成分查询
+    path("api/search/", include("api_search.urls")),
 ]
 
 # 开发环境提供 media 文件访问

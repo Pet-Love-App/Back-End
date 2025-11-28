@@ -27,6 +27,10 @@ class UserProfile(models.Model):
     )
     bio = models.TextField(max_length=500, blank=True, help_text="个人简介")
     phone = models.CharField(max_length=20, blank=True, help_text="手机号")
+    is_admin = models.BooleanField(
+        default=False,
+        help_text="管理员标识 - 允许更新已有营养成分的猫粮",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

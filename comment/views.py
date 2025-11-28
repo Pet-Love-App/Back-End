@@ -42,19 +42,24 @@ class CommentViewSet(viewsets.ModelViewSet):
     def list(self, request, *args, **kwargs):
         """
         获取评论列表
-        支持按 target_type 和 target_id 过滤
-        支持排序：likes（按赞数）、latest（最新，默认）
+        支持按 target_type、target_id、author_id 和 my 过滤
         """
         queryset = self.filter_queryset(self.get_queryset())
 
         # 过滤条件
         target_type = request.query_params.get("target_type")
         target_id = request.query_params.get("target_id")
+        author_id = request.query_params.get("author_id")
+        my = request.query_params.get("my")  # 获取当前用户的评论
 
         if target_type:
             queryset = queryset.filter(target_type=target_type)
         if target_id:
             queryset = queryset.filter(target_id=target_id)
+        if author_id:
+            queryset = queryset.filter(author_id=author_id)
+        if my and request.user.is_authenticated:
+            queryset = queryset.filter(author=request.user)
 
         # 排序
         order_by = request.query_params.get("order_by")
