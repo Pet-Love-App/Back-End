@@ -48,7 +48,8 @@ def _post_json(url: str, data: dict, headers: dict, timeout: int = 120) -> tuple
     except Exception as e:  # pragma: no cover
         return 0, str(e)
 
-from typing import Optional, List
+
+from typing import List, Optional
 
 
 class Request:
@@ -67,7 +68,16 @@ class Request:
     """标签"""
     tags: list[str]
 
-    def __init__(self, additive: List[str], ingredient: List[str], nutrient: str, percent_data: None, percentage: bool, safety: str, tags: List[str]) -> None:
+    def __init__(
+        self,
+        additive: list[str],
+        ingredient: list[str],
+        nutrient: str,
+        percent_data: None,
+        percentage: bool,
+        safety: str,
+        tags: list[str],
+    ) -> None:
         self.additive = additive
         self.ingredient = ingredient
         self.nutrient = nutrient
@@ -143,7 +153,7 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         "  - safety（string，必填，大约50个汉字的针对猫粮的简要安全性分析，重点关注添加剂）；\n"
         "  - nutrient（string，必填，大约300个汉字的针对猫粮的简要营养分析）；\n"
         "  - percentage（boolean/null，可选，如果你能分析出以下各成分占比，请在此处填True，否则填False。尽可能分析！）；\n"
-        "  - percent_data（dict,以营养成分英文名作为字段名，例如\"carbohydrates\"，值为number,各相应成分百分比。如果能分析占比，percentage=True。如果percentage=True，一定要有一个字段是others，代表其他成分的百分比。所有含量之和应为100）\n"
+        '  - percent_data（dict,以营养成分英文名作为字段名，例如"carbohydrates"，值为number,各相应成分百分比。如果能分析占比，percentage=True。如果percentage=True，一定要有一个字段是others，代表其他成分的百分比。所有含量之和应为100）\n'
         "- 数值字段无法判断时返回 null；数组字段无法判断或无识别结果时返回空数组。\n"
         "- 禁止输出推理过程或步骤说明，只保留结论性短句或最终的 JSON 字段内容。\n"
     )
@@ -275,14 +285,24 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
         return [str(v).strip()]
 
     schema = Request(
-            tags=[],
-            additive=[],
-            ingredient=[],
-            nutrient="",
-            safety="",
-            percentage=False,
-            percent_data=None,
-        )
+        tags=[],
+        additive=[],
+        ingredient=[],
+        nutrient="",
+        safety="",
+        percentage=False,
+        percent_data=None,
+    )
+
+    print("=" * 80)
+    print("🔍 [LLM] Parsing structured response...")
+    print(f"🔍 [LLM] Type of parsed: {type(parsed)}")
+    print(f"🔍 [LLM] Is dict: {isinstance(parsed, dict)}")
+    if isinstance(parsed, dict):
+        print(f"🔍 [LLM] Keys in parsed dict: {list(parsed.keys())}")
+        print("🔍 [LLM] Full parsed content:")
+        print(json.dumps(parsed, indent=2, ensure_ascii=False))
+    print("=" * 80)
 
     if isinstance(parsed, dict):
         # Extract tags
@@ -336,25 +356,44 @@ def llm_chat(request: HttpRequest) -> JsonResponse:
                 schema.percentage = False
 
         # percent_data
-        schema.percent_data = parsed.get("percent_data") or parsed.get("percentage_data") or {}
+        raw_percent_data = parsed.get("percent_data") or parsed.get("percentage_data") or {}
+        print(f"🔍 [LLM Response] Raw percent_data from LLM: {raw_percent_data}")
+        print(f"🔍 [LLM Response] Type: {type(raw_percent_data)}")
+
+        schema.percent_data = raw_percent_data
         # make sure percent_data has correct form
-        if(not isinstance(schema.percent_data, dict)):
+        if not isinstance(schema.percent_data, dict):
+            print("⚠️ [LLM Response] percent_data is not dict, converting to empty dict")
             schema.percent_data = {}
+
+        print(f"🔍 [LLM Response] After validation, percent_data: {schema.percent_data}")
+        print(f"🔍 [LLM Response] Keys count: {len(schema.percent_data)}")
+
         # make sure sum=100
         if schema.percentage and schema.percent_data:
-                total = sum(v for v in schema.percent_data.values() if isinstance(v, (int, float)))
-                if 0 < total < 100:
-                    schema.percent_data["others"] = 100 - total
+            total = sum(v for v in schema.percent_data.values() if isinstance(v, (int, float)))
+            print(f"🔍 [LLM Response] Total percentage: {total}")
+            if 0 < total < 100:
+                schema.percent_data["others"] = 100 - total
+                print(f"✅ [LLM Response] Added 'others': {100 - total}")
 
-            # make sure "percentage" is False if there is no percent_data(only has others=100)
+        # make sure "percentage" is False if there is no percent_data(only has others=100)
         if not schema.percent_data or len(schema.percent_data) <= 1:
+            print("⚠️ [LLM Response] No valid percent_data, setting percentage to False")
+            print(f"   - percent_data empty: {not schema.percent_data}")
+            print(
+                f"   - percent_data keys: {list(schema.percent_data.keys()) if schema.percent_data else []}"
+            )
             schema.percentage = False
+        else:
+            print(
+                f"✅ [LLM Response] Valid percent_data found with {len(schema.percent_data)} fields"
+            )
     else:
         # If no structured JSON, do NOT include model's free-form text to avoid leaking reasoning.
         pass
 
-
-    resp={
+    resp = {
         "additive": schema.additive,
         "ingredient": schema.ingredient,
         "nutrient": schema.nutrient,
@@ -390,7 +429,11 @@ from .serializers import (
 def save_report(request):
     """
     保存AI分析报告到数据库
-    POST /api/ai-report/save/
+    POST /api/ai/save/
+
+    权限说明:
+    - 普通用户: 仅能为没有营养成分信息的猫粮保存报告
+    - 管理员用户: 可以覆盖更新已有营养成分信息的猫粮报告
 
     请求体示例:
     {
@@ -402,12 +445,14 @@ def save_report(request):
         "safety": "安全性分析...",
         "nutrient": "营养分析...",
         "percentage": true,
-        "crude_protein": 40.0,
-        "crude_fat": 18.0,
-        "carbohydrates": 20.0,
-        "crude_fiber": 3.0,
-        "crude_ash": 8.0,
-        "others": 11.0
+        "percent_data": {
+            "protein": 40.0,
+            "fat": 18.0,
+            "carbohydrates": 20.0,
+            "fiber": 3.0,
+            "ash": 8.0,
+            "others": 11.0
+        }
     }
     """
     catfood_id = request.data.get("catfood_id")
@@ -433,34 +478,46 @@ def save_report(request):
         "safety": request.data.get("safety", ""),
         "nutrient": request.data.get("nutrient", ""),
         "percentage": request.data.get("percentage", False),
-        "crude_protein": request.data.get("percent_data", {}).get("crude_protein")
-        or request.data.get("crude_protein"),
-        "crude_fat": request.data.get("percent_data", {}).get("crude_fat")
-        or request.data.get("crude_fat"),
-        "carbohydrates": request.data.get("percent_data", {}).get("carbohydrates")
-        or request.data.get("carbohydrates"),
-        "crude_fiber": request.data.get("percent_data", {}).get("crude_fiber")
-        or request.data.get("crude_fiber"),
-        "crude_ash": request.data.get("percent_data", {}).get("crude_ash")
-        or request.data.get("crude_ash"),
-        "others": request.data.get("percent_data", {}).get("others") or request.data.get("others"),
+        "percent_data": request.data.get("percent_data", {}),
     }
 
     # 检查是否已存在报告
     try:
         existing_report = AIAnalysisReport.objects.get(catfood=catfood)
-        # 更新现有报告
+
+        # 权限检查：只有管理员可以更新已有报告
+        is_admin = False
+        if request.user and not isinstance(request.user, AnonymousUser):
+            try:
+                is_admin = request.user.profile.is_admin
+            except Exception:
+                is_admin = False
+
+        if not is_admin:
+            return Response(
+                {
+                    "error": "该猫粮已有营养成分信息，只有管理员可以更新",
+                    "message": "普通用户无权覆盖已有的营养成分数据。如需更新，请联系管理员。",
+                    "existing_report_id": existing_report.id,
+                },
+                status=http_status.HTTP_403_FORBIDDEN,
+            )
+
+        # 管理员更新现有报告
         serializer = AIAnalysisReportCreateSerializer(existing_report, data=report_data)
         if serializer.is_valid():
             serializer.save()
             response_serializer = AIAnalysisReportSerializer(serializer.instance)
             return Response(
-                {"message": "报告更新成功", "report": response_serializer.data},
+                {
+                    "message": "报告更新成功（管理员权限）",
+                    "report": response_serializer.data,
+                },
                 status=http_status.HTTP_200_OK,
             )
         return Response(serializer.errors, status=http_status.HTTP_400_BAD_REQUEST)
     except AIAnalysisReport.DoesNotExist:
-        # 创建新报告
+        # 创建新报告（所有用户均可）
         serializer = AIAnalysisReportCreateSerializer(data=report_data)
         if serializer.is_valid():
             serializer.save()
@@ -477,7 +534,7 @@ def save_report(request):
 def get_report(request, catfood_id):
     """
     获取指定猫粮的AI分析报告
-    GET /api/ai-report/{catfood_id}/
+    GET /api/ai/{catfood_id}/
 
     返回示例:
     {
@@ -491,7 +548,7 @@ def get_report(request, catfood_id):
         "safety": "...",
         "nutrient": "...",
         "percentage": true,
-        "percent_data": {...},
+        "percent_data": {"protein": 40, "fat": 18, ...},
         "created_at": "2025-01-01T00:00:00Z",
         "updated_at": "2025-01-01T00:00:00Z"
     }
@@ -520,7 +577,7 @@ def get_report(request, catfood_id):
 def delete_report(request, catfood_id):
     """
     删除指定猫粮的AI分析报告（用于重新生成）
-    DELETE /api/ai-report/{catfood_id}/
+    DELETE /api/ai/{catfood_id}/delete/
     """
     catfood = get_object_or_404(CatFood, id=catfood_id)
 
@@ -537,12 +594,13 @@ def delete_report(request, catfood_id):
 def check_report_exists(request, catfood_id):
     """
     检查指定猫粮是否已有AI分析报告
-    GET /api/ai-report/{catfood_id}/exists/
+    GET /api/ai/{catfood_id}/exists/
 
     返回示例:
     {
         "exists": true,
         "catfood_id": 1,
+        "report_id": 1,
         "updated_at": "2025-01-01T00:00:00Z"
     }
     """

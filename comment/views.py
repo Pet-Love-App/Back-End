@@ -1,5 +1,6 @@
 """
-评论相关视图
+评论系统视图
+提供评论的 CRUD 操作 + 点赞功能
 """
 
 from rest_framework import status, viewsets
@@ -19,7 +20,7 @@ from .serializers import (
 class CommentViewSet(viewsets.ModelViewSet):
     """
     评论视图集
-    提供评论的 CRUD 操作
+    提供评论的 CRUD 操作 + 点赞 + 按赞数排序 + 回复
     """
 
     queryset = Comment.objects.all().order_by("-created_at")
@@ -27,7 +28,6 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticatedOrReadOnly]
 
     def get_serializer_class(self):
-        """根据操作类型返回不同的序列化器"""
         if self.action == "create":
             return CommentCreateSerializer
         elif self.action in ["update", "partial_update"]:
@@ -35,12 +35,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         return CommentSerializer
 
     def get_permissions(self):
-        """
-        根据操作类型设置权限
-        - 创建评论需要登录
-        - 列表和详情可以匿名访问
-        """
-        if self.action in ["create", "update", "partial_update", "destroy"]:
+        if self.action in ["create", "update", "partial_update", "destroy", "like"]:
             return [IsAuthenticated()]
         return super().get_permissions()
 
@@ -48,6 +43,7 @@ class CommentViewSet(viewsets.ModelViewSet):
         """
         获取评论列表
         支持按 target_type、target_id、author_id 和 my 过滤
+        支持排序：likes（按赞数）、latest（最新，默认）
         """
         queryset = self.filter_queryset(self.get_queryset())
 
@@ -66,6 +62,11 @@ class CommentViewSet(viewsets.ModelViewSet):
         if my and request.user.is_authenticated:
             queryset = queryset.filter(author=request.user)
 
+        # 排序
+        order_by = request.query_params.get("order_by")
+        if order_by == "likes":
+            queryset = queryset.order_by("-likes", "-created_at")
+
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
@@ -80,7 +81,6 @@ class CommentViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         self.perform_create(serializer)
 
-        # 使用详情序列化器返回完整数据
         response_serializer = CommentSerializer(serializer.instance, context={"request": request})
         headers = self.get_success_headers(response_serializer.data)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)

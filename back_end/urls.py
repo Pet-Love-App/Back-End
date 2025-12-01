@@ -34,6 +34,8 @@ urlpatterns = [
     path("ocr/", include("ocr.urls")),
     # 猫粮管理
     path("api/catfood/", include("catfood.urls")),
+    # 论坛系统（帖子、通知）
+    path("api/forum/", include("forum.urls")),
     # 评论系统
     path("api/comments/", include("comment.urls")),
     # 成分查询

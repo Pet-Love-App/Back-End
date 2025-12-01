@@ -1,5 +1,6 @@
 """
 评论系统模型
+支持对不同类型对象（帖子、猫粮、报告等）的评论
 """
 
 from django.contrib.auth.models import User
@@ -9,7 +10,7 @@ from django.db import models
 class Comment(models.Model):
     """
     评论模型
-    支持对不同类型对象（帖子、猫粮、报告等）的评论
+    支持对不同类型对象（帖子、猫粮、报告等）的评论 + 支持父评论（回复）
     """
 
     TARGET_TYPE_CHOICES = [
@@ -37,7 +38,17 @@ class Comment(models.Model):
     )
     target_id = models.IntegerField(help_text="目标对象 ID")
 
-    # 点赞数
+    # 父评论（回复时使用）
+    parent = models.ForeignKey(
+        "self",
+        null=True,
+        blank=True,
+        related_name="replies",
+        on_delete=models.CASCADE,
+        help_text="父评论（若为回复）",
+    )
+
+    # 点赞数（冗余字段，配合 CommentLike）
     likes = models.IntegerField(default=0, help_text="点赞数")
 
     # 时间戳
@@ -50,7 +61,6 @@ class Comment(models.Model):
         verbose_name_plural = "评论"
         ordering = ["-created_at"]  # 按创建时间倒序
         indexes = [
-            # 为常用查询添加索引
             models.Index(fields=["target_type", "target_id"]),
             models.Index(fields=["author"]),
             models.Index(fields=["-created_at"]),

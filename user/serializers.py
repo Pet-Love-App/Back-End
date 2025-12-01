@@ -45,6 +45,7 @@ class UserSerializer(serializers.ModelSerializer):
     """用户序列化器 - 完整的用户信息（包含头像和宠物）"""
 
     avatar = serializers.SerializerMethodField()
+    is_admin = serializers.SerializerMethodField()
     pets = PetSerializer(many=True, read_only=True)
     reputation = ReputationSummarySerializer(read_only=True)
     badges = serializers.SerializerMethodField()
@@ -69,6 +70,13 @@ class UserSerializer(serializers.ModelSerializer):
         badges = UserBadge.objects.filter(user=obj).select_related("badge").order_by("-is_equipped", "-acquired_at")
         from reputation.serializers import UserBadgeSerializer
         return UserBadgeSerializer(badges, many=True).data
+
+    def get_is_admin(self, obj):
+        """获取用户管理员状态"""
+        try:
+            return obj.profile.is_admin if obj.profile else False
+        except UserProfile.DoesNotExist:
+            return False
 
 
 class AvatarUploadSerializer(serializers.Serializer):

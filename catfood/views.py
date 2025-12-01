@@ -130,6 +130,64 @@ class CatFoodViewSet(viewsets.ModelViewSet):
         serializer = CommentSerializer(comments, many=True, context={"request": request})
         return Response(serializer.data)
 
+    @action(detail=False, methods=["post"], url_path="scan-barcode")
+    def scan_barcode(self, request):
+        """
+        扫描条形码并返回猫粮信息
+        如果条形码不存在，返回404
+        POST /api/catfood/scan-barcode/
+        Body: {
+            "barcode": "6901234567890"
+        }
+        """
+        barcode = request.data.get("barcode")
+
+        if not barcode:
+            return Response({"error": "请提供条形码"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 查找是否已存在该条形码的猫粮
+        try:
+            catfood = CatFood.objects.get(barcode=barcode)
+            serializer = CatFoodSerializer(catfood)
+            return Response(
+                {
+                    "exists": True,
+                    "message": "找到已有猫粮",
+                    "catfood": serializer.data,
+                },
+                status=status.HTTP_200_OK,
+            )
+        except CatFood.DoesNotExist:
+            # 条形码不存在
+            return Response(
+                {
+                    "exists": False,
+                    "message": "条形码未注册，数据库中暂无该猫粮信息",
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+    @action(detail=False, methods=["get"], url_path="by-barcode")
+    def get_by_barcode(self, request):
+        """
+        通过条形码查询猫粮
+        GET /api/catfood/by-barcode/?barcode=xxx
+        """
+        barcode = request.query_params.get("barcode")
+
+        if not barcode:
+            return Response({"error": "请提供条形码"}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            catfood = CatFood.objects.get(barcode=barcode)
+            serializer = CatFoodSerializer(catfood)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except CatFood.DoesNotExist:
+            return Response(
+                {"error": "未找到该条形码对应的猫粮"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
 
 class CatFoodFavoriteViewSet(viewsets.ModelViewSet):
     """
