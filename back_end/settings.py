@@ -61,6 +61,7 @@ INSTALLED_APPS = [
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
     "djoser",
+    "reputation",  # 信誉系统
 ]
 
 MIDDLEWARE = [

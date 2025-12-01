@@ -4,7 +4,8 @@
 
 from django.contrib.auth.models import User
 from rest_framework import serializers
-
+from reputation.serializers import ReputationSummarySerializer, UserBadgeSerializer
+from reputation.models import UserBadge
 from .models import Comment, CommentLike
 
 
@@ -12,10 +13,11 @@ class CommentAuthorSerializer(serializers.ModelSerializer):
     """评论作者信息序列化器"""
 
     avatar = serializers.SerializerMethodField()
-
+    reputation = ReputationSummarySerializer(read_only=True)
+    equippedBadges = serializers.SerializerMethodField()
     class Meta:
         model = User
-        fields = ["id", "username", "avatar"]
+        fields = ["id", "username", "avatar", "reputation", "equippedBadges"]
 
     def get_avatar(self, obj):
         """获取用户头像"""
@@ -25,6 +27,10 @@ class CommentAuthorSerializer(serializers.ModelSerializer):
         except Exception:
             pass
         return None
+    
+    def get_equippedBadges(self, obj):
+        badges = UserBadge.objects.filter(user=obj, is_equipped=True).select_related("badge")
+        return UserBadgeSerializer(badges, many=True).data
 
 
 class CommentSerializer(serializers.ModelSerializer):
