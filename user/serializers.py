@@ -51,7 +51,7 @@ class UserSerializer(serializers.ModelSerializer):
     badges = serializers.SerializerMethodField()
     class Meta:
         model = User
-        fields = ["id", "username", "avatar", "pets","reputation", "badges"]
+        fields = ["id", "username", "avatar", "pets","reputation", "badges", "is_admin"]
         read_only_fields = ["id"]
 
     def get_avatar(self, obj):
