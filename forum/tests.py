@@ -1,13 +1,132 @@
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APIClient
-from django.test import TestCase
+from django.test import TestCase, SimpleTestCase
+from types import SimpleNamespace
+from unittest.mock import patch, MagicMock
 
 from django.contrib.auth.models import User
 
 from .models import Post, Notification
 
+from .serializers import PostCreateSerializer, FavoriteToggleSerializer
+from rest_framework import serializers as drf_serializers
 
+#单元测试
+class PostCreateSerializerUnitTests(SimpleTestCase):
+    def test_validate_content_blank(self):
+        ser = PostCreateSerializer(data={"content": "   "})
+        self.assertFalse(ser.is_valid())
+        self.assertIn("content", ser.errors)
+
+    def test_validate_content_valid(self):
+        ser = PostCreateSerializer(data={"content": "Hello"})
+        self.assertTrue(ser.is_valid())
+
+    def test_validate_content_boundary(self):
+        # 边界值测试：5000 字允许，5001 字不允许
+        ok_text = "x" * 5000
+        ser = PostCreateSerializer(data={"content": ok_text})
+        self.assertTrue(ser.is_valid())
+
+        too_long = "x" * 5001
+        ser2 = PostCreateSerializer(data={"content": too_long})
+        self.assertFalse(ser2.is_valid())
+        self.assertIn("content", ser2.errors)
+
+class FavoriteToggleSerializerUnitTests(SimpleTestCase):
+    def _make_request_with_user(self, user):
+        return SimpleNamespace(user=user)
+
+    def test_validate_post_not_exist(self):
+        data = {"post_id": 999}
+        request = self._make_request_with_user(MagicMock(id=1))
+
+        # 模拟 Post.objects.get 抛出模型的 DoesNotExist， 这样序列化器会把它转换成 ValidationError
+        with patch("forum.serializers.Post.objects.get", side_effect=Post.DoesNotExist()):
+            ser = FavoriteToggleSerializer(data=data, context={"request": request})
+            self.assertFalse(ser.is_valid())
+            self.assertIn("post_id", ser.errors)
+
+    def test_create_favorited(self):
+        data = {"post_id": 1}
+        user = MagicMock(id=1)
+        request = self._make_request_with_user(user)
+
+        mock_post = MagicMock()
+        mock_post.favorites.count.return_value = 1
+
+        fake_filter = MagicMock()
+        fake_filter.first.return_value = None
+
+        with patch("forum.serializers.Post.objects.get", return_value=mock_post), \
+            patch("forum.serializers.Favorite.objects.filter", return_value=fake_filter) as mock_filter_call, \
+            patch("forum.serializers.Favorite.objects.create") as mock_create:
+
+            ser = FavoriteToggleSerializer(data=data, context={"request": request})
+            self.assertTrue(ser.is_valid(), ser.errors)
+            result = ser.save()
+
+            self.assertEqual(result.get("action"), "favorited")
+            self.assertTrue(result.get("is_favorited"))
+            self.assertEqual(result.get("favorites_count"), 1)
+            mock_create.assert_called_once()
+
+    def test_create_unfavorited(self):
+        data = {"post_id": 1}
+        user = MagicMock(id=1)
+        request = self._make_request_with_user(user)
+
+        mock_post = MagicMock()
+        mock_post.favorites.count.return_value = 0
+
+        fake_fav = MagicMock()
+        fake_filter = MagicMock()
+        fake_filter.first.return_value = fake_fav
+
+        with patch("forum.serializers.Post.objects.get", return_value=mock_post), \
+            patch("forum.serializers.Favorite.objects.filter", return_value=fake_filter) as mock_filter_call, \
+            patch.object(fake_fav, "delete", return_value=None) as mock_delete:
+
+            ser = FavoriteToggleSerializer(data=data, context={"request": request})
+            self.assertTrue(ser.is_valid(), ser.errors)
+            result = ser.save()
+
+            self.assertEqual(result.get("action"), "unfavorited")
+            self.assertFalse(result.get("is_favorited"))
+            self.assertEqual(result.get("favorites_count"), 0)
+            mock_delete.assert_called_once()
+
+    def test_post_create_media_too_many_files(self):
+        # 模拟返回超过 9 个文件
+        user = MagicMock(id=1)
+        request = self._make_request_with_user(user)
+        files = [MagicMock() for _ in range(10)]
+        request.FILES = SimpleNamespace(getlist=lambda name: files)
+
+        mock_post = MagicMock()
+        with patch("forum.serializers.Post.objects.create", return_value=mock_post):
+            ser = PostCreateSerializer(data={"content": "hello"}, context={"request": request})
+            self.assertTrue(ser.is_valid(), ser.errors)
+            with self.assertRaises(drf_serializers.ValidationError):
+                ser.save()
+
+    def test_post_create_media_file_too_large(self):
+        # 模拟单个文件超过 10MB
+        user = MagicMock(id=1)
+        request = self._make_request_with_user(user)
+
+        large_file = SimpleNamespace(size=(11 * 1024 * 1024), content_type="image/png")
+        request.FILES = SimpleNamespace(getlist=lambda name: [large_file])
+
+        mock_post = MagicMock()
+        with patch("forum.serializers.Post.objects.create", return_value=mock_post):
+            ser = PostCreateSerializer(data={"content": "hello"}, context={"request": request})
+            self.assertTrue(ser.is_valid(), ser.errors)
+            with self.assertRaises(drf_serializers.ValidationError):
+                ser.save()
+
+#集成测试
 class ForumPostTests(TestCase):
     def setUp(self):
         self.client = APIClient()
