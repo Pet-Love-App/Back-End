@@ -4,6 +4,8 @@
 
 from django.contrib.auth.models import User
 from rest_framework import serializers
+from reputation.serializers import ReputationSummarySerializer, UserBadgeSerializer
+from reputation.models import UserBadge
 
 from .models import Pet, UserProfile
 
@@ -45,10 +47,11 @@ class UserSerializer(serializers.ModelSerializer):
     avatar = serializers.SerializerMethodField()
     is_admin = serializers.SerializerMethodField()
     pets = PetSerializer(many=True, read_only=True)
-
+    reputation = ReputationSummarySerializer(read_only=True)
+    badges = serializers.SerializerMethodField()
     class Meta:
         model = User
-        fields = ["id", "username", "avatar", "is_admin", "pets"]
+        fields = ["id", "username", "avatar", "pets","reputation", "badges", "is_admin"]
         read_only_fields = ["id"]
 
     def get_avatar(self, obj):
@@ -62,6 +65,11 @@ class UserSerializer(serializers.ModelSerializer):
         except UserProfile.DoesNotExist:
             pass
         return None
+    
+    def get_badges(self, obj):
+        badges = UserBadge.objects.filter(user=obj).select_related("badge").order_by("-is_equipped", "-acquired_at")
+        from reputation.serializers import UserBadgeSerializer
+        return UserBadgeSerializer(badges, many=True).data
 
     def get_is_admin(self, obj):
         """获取用户管理员状态"""
