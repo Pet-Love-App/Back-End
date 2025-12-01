@@ -4,6 +4,8 @@ from django.contrib.auth import get_user_model
 from django.urls import reverse
 from django.core.exceptions import ImproperlyConfigured
 
+from rest_framework.test import APIClient
+
 from .models import ReputationSummary, Badge, UserBadge
 from .services import compute_user_reputation, evaluate_badge_rule, get_runtime_metrics
 
@@ -136,6 +138,7 @@ class ReputationCalculationTests(TestCase):
 
 class ReputationAPITests(TestCase):
     def setUp(self):
+        self.client = APIClient()
         # 管理员登录
         self.admin_user = User.objects.create_superuser(
             username="admin",
@@ -225,3 +228,58 @@ class ReputationAPITests(TestCase):
         resp = self.client.post(f"/reputation/badges/{badge.code}/unequip/")
         self.assertEqual(resp.status_code, 200)
         self.assertFalse(UserBadge.objects.get(user=self.user, badge=badge).is_equipped)
+
+
+class ReputationAPIEdgeTests(TestCase):
+    def setUp(self):
+        self.client = APIClient()
+        self.user = User.objects.create_user(username="u1", password="p1")
+        self.admin = User.objects.create_superuser(username="adm", email="a@a.com", password="ap")
+
+    def test_me_requires_auth(self):
+        resp = self.client.get("/reputation/me/")
+        # 未认证，可能返回 401 或 403（取决于全局认证设置）
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_my_badges_requires_auth(self):
+        resp = self.client.get("/reputation/my-badges/")
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_user_reputation_allow_any(self):
+        # 匿名也可访问别人的概览（当前策略），存在则 200
+        # 先确保该用户有概览
+        compute_user_reputation(self.user)
+        resp = self.client.get(f"/reputation/users/{self.user.id}/")
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn("score", resp.data)
+
+    def test_admin_only_recompute(self):
+        self.client.login(username="u1", password="p1")
+        resp = self.client.post("/reputation/admin/recompute_user/", {"user_id": self.user.id}, format="json")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_badge_rule_unknown_kind(self):
+        b = Badge.objects.create(code="r2", name="R2", enabled=True,
+            rule={"type":"all_of","conditions":[{"kind":"unknown_kind","value":123}]})
+
+        s = compute_user_reputation(self.user)
+        m = get_runtime_metrics(self.user)
+        self.assertFalse(evaluate_badge_rule(self.user, s, b, m))
+
+    def test_badge_rule_one_of_logic(self):
+        # one_of：任一条件满足即可
+        b = Badge.objects.create(code="r3", name="R3", enabled=True,
+            rule={"type":"one_of","conditions":[
+                {"kind":"comments_at_least","value":1},
+                {"kind":"reputation_score_at_least","value":0}
+            ]})
+        s = compute_user_reputation(self.user)
+        m = get_runtime_metrics(self.user)
+        self.assertTrue(evaluate_badge_rule(self.user, s, b, m))
+
+    def test_badge_rule_empty_conditions(self):
+        b = Badge.objects.create(code="r4", name="R4", enabled=True,
+            rule={"type":"all_of","conditions":[]})
+        s = compute_user_reputation(self.user)
+        m = get_runtime_metrics(self.user)
+        self.assertFalse(evaluate_badge_rule(self.user, s, b, m))

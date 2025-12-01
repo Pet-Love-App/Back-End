@@ -6,13 +6,59 @@ from rest_framework import viewsets, permissions, status, mixins
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from rest_framework.permissions import IsAuthenticated, IsAdminUser, AllowAny
 
 from .models import Badge, UserBadge, ReputationSummary
 from .serializers import BadgeSerializer, UserBadgeSerializer, ReputationSummarySerializer
 from .services import compute_user_reputation
 
 User = get_user_model()
+
+
+class MyReputationView(APIView):
+    """
+    GET /reputation/me/
+    获取当前用户的信誉概览（不强制重算，按需可改成每次重算）
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        summary = ReputationSummary.objects.filter(user=request.user).first()
+        if not summary:
+            # 若未创建（理论上通过 post_save 会创建），兜底创建一个
+            summary = compute_user_reputation(request.user)
+        data = ReputationSummarySerializer(summary).data
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class UserReputationView(APIView):
+    """
+    GET /reputation/users/{user_id}/
+    获取指定用户的信誉概览（默认对所有人开放，可按需提升权限）
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, user_id: int):
+        user = get_object_or_404(User, pk=user_id)
+        summary = ReputationSummary.objects.filter(user=user).first()
+        if not summary:
+            # 若目标用户从未计算，创建初始概览（可换成 404 也行）
+            summary = compute_user_reputation(user)
+        data = ReputationSummarySerializer(summary).data
+        return Response(data, status=status.HTTP_200_OK)
+
+
+class MyBadgesView(APIView):
+    """
+    GET /reputation/my-badges/
+    当前登录用户持有的徽章列表（含佩戴状态）
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = UserBadge.objects.select_related("badge").filter(user=request.user).order_by("-acquired_at")
+        data = UserBadgeSerializer(qs, many=True).data
+        return Response(data, status=status.HTTP_200_OK)
 
 
 class EquipBadgeView(APIView):
@@ -62,35 +108,35 @@ class UnequipBadgeView(APIView):
 class BadgeViewSet(mixins.ListModelMixin,
                    mixins.RetrieveModelMixin,
                    viewsets.GenericViewSet):
-        """
-        徽章管理：
-        - GET /reputation/badges/
-        - GET /reputation/badges/{id}/
-        - POST /reputation/badges/{id}/enable/
-        - POST /reputation/badges/{id}/disable/
-        """
-        queryset = Badge.objects.all()
-        serializer_class = BadgeSerializer
+    """
+    徽章管理：
+    - GET /reputation/badges/
+    - GET /reputation/badges/{id}/
+    - POST /reputation/badges/{id}/enable/
+    - POST /reputation/badges/{id}/disable/
+    """
+    queryset = Badge.objects.all()
+    serializer_class = BadgeSerializer
 
-        def get_permissions(self):
-            if self.action in ["enable", "disable"]:
-                return [IsAdminUser()]
-            # 列表/详情对所有已认证或匿名均可按需开放，这里默认允许任何人读取
-            return [permissions.AllowAny()]
+    def get_permissions(self):
+        if self.action in ["enable", "disable"]:
+            return [IsAdminUser()]
+        # 列表/详情对所有已认证或匿名均可按需开放，这里默认允许任何人读取
+        return [permissions.AllowAny()]
 
-        @action(detail=True, methods=["post"], url_path="enable")
-        def enable(self, request, pk=None):
-            badge = self.get_object()
-            badge.enabled = True
-            badge.save(update_fields=["enabled"])
-            return Response({"message": "已启用徽章"}, status=status.HTTP_200_OK)
+    @action(detail=True, methods=["post"], url_path="enable")
+    def enable(self, request, pk=None):
+        badge = self.get_object()
+        badge.enabled = True
+        badge.save(update_fields=["enabled"])
+        return Response({"message": "已启用徽章"}, status=status.HTTP_200_OK)
 
-        @action(detail=True, methods=["post"], url_path="disable")
-        def disable(self, request, pk=None):
-            badge = self.get_object()
-            badge.enabled = False
-            badge.save(update_fields=["enabled"])
-            return Response({"message": "已禁用徽章"}, status=status.HTTP_200_OK)
+    @action(detail=True, methods=["post"], url_path="disable")
+    def disable(self, request, pk=None):
+        badge = self.get_object()
+        badge.enabled = False
+        badge.save(update_fields=["enabled"])
+        return Response({"message": "已禁用徽章"}, status=status.HTTP_200_OK)
 
 
 class ReputationAdminViewSet(viewsets.ViewSet):
