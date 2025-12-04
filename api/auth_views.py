@@ -202,7 +202,7 @@ def logout(request):
 @require_auth
 def get_profile(request):
     """
-    获取当前用户信息
+    获取当前用户信息（包含宠物列表）
 
     GET /api/auth/profile/
     """
@@ -234,9 +234,23 @@ def get_profile(request):
             .execute()
         )
 
+        # 获取宠物列表
+        pets_result = (
+            supabase_admin.table("pets")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
         return JsonResponse(
             {
-                "user": {"id": user.id, "email": user.email, **profile_data},
+                "user": {
+                    "id": user.id,
+                    "email": user.email,
+                    **profile_data,
+                    "pets": pets_result.data if pets_result.data else [],
+                },
                 "reputation": reputation_data,
                 "badges": badges.data if badges.data else [],
             }
