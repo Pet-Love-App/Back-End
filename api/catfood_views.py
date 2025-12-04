@@ -504,3 +504,356 @@ def get_catfood_ratings(request, catfood_id):
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
+
+
+# ==================== 猫粮点赞功能 ====================
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@require_auth
+def list_catfood_likes(request):
+    """
+    获取用户的点赞列表
+
+    GET /api/catfood/likes/
+    """
+    try:
+        user = get_current_user(request)
+
+        # 查询点赞，并关联猫粮信息
+        result = (
+            supabase_admin.table("catfood_likes")
+            .select("*, catfood:catfoods(*)")
+            .eq("user_id", user.id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+        return JsonResponse({"likes": result.data})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@require_auth
+def like_catfood(request):
+    """
+    点赞猫粮
+
+    POST /api/catfood/likes/
+    Body: {"catfood_id": 1}
+    """
+    try:
+        user = get_current_user(request)
+        data = json.loads(request.body)
+        catfood_id = data.get("catfood_id")
+
+        if not catfood_id:
+            return JsonResponse({"error": "catfood_id is required"}, status=400)
+
+        # 检查猫粮是否存在
+        catfood = (
+            supabase_admin.table("catfoods").select("id").eq("id", catfood_id).single().execute()
+        )
+
+        if not catfood.data:
+            return JsonResponse({"error": "Catfood not found"}, status=404)
+
+        # 检查是否已点赞
+        existing = (
+            supabase_admin.table("catfood_likes")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("catfood_id", catfood_id)
+            .execute()
+        )
+
+        if existing.data:
+            return JsonResponse({"error": "Already liked"}, status=400)
+
+        # 创建点赞
+        like_data = {"user_id": user.id, "catfood_id": catfood_id}
+        result = supabase_admin.table("catfood_likes").insert(like_data).execute()
+
+        return JsonResponse({"message": "Liked successfully", "like": result.data[0]}, status=201)
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON format"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@require_auth
+def unlike_catfood(request, like_id):
+    """
+    取消点赞
+
+    DELETE /api/catfood/likes/<like_id>/
+    """
+    try:
+        user = get_current_user(request)
+
+        # 检查点赞是否存在且属于当前用户
+        like = (
+            supabase_admin.table("catfood_likes")
+            .select("*")
+            .eq("id", like_id)
+            .eq("user_id", user.id)
+            .single()
+            .execute()
+        )
+
+        if not like.data:
+            return JsonResponse({"error": "Like not found"}, status=404)
+
+        # 删除点赞
+        supabase_admin.table("catfood_likes").delete().eq("id", like_id).execute()
+
+        return JsonResponse({"message": "Unliked successfully"})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@require_auth
+def toggle_like_catfood(request):
+    """
+    切换点赞状态（点赞/取消点赞）
+
+    POST /api/catfood/likes/toggle/
+    Body: {"catfood_id": 1}
+    """
+    try:
+        user = get_current_user(request)
+        data = json.loads(request.body)
+        catfood_id = data.get("catfood_id")
+
+        if not catfood_id:
+            return JsonResponse({"error": "catfood_id is required"}, status=400)
+
+        # 检查猫粮是否存在
+        catfood = (
+            supabase_admin.table("catfoods").select("id").eq("id", catfood_id).single().execute()
+        )
+
+        if not catfood.data:
+            return JsonResponse({"error": "Catfood not found"}, status=404)
+
+        # 检查是否已点赞
+        existing = (
+            supabase_admin.table("catfood_likes")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("catfood_id", catfood_id)
+            .execute()
+        )
+
+        if existing.data:
+            # 取消点赞
+            supabase_admin.table("catfood_likes").delete().eq(
+                "id", existing.data[0]["id"]
+            ).execute()
+            return JsonResponse({"message": "Unliked successfully", "liked": False})
+        else:
+            # 点赞
+            like_data = {"user_id": user.id, "catfood_id": catfood_id}
+            supabase_admin.table("catfood_likes").insert(like_data).execute()
+            return JsonResponse({"message": "Liked successfully", "liked": True})
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON format"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@require_auth
+def check_like_status(request):
+    """
+    检查点赞状态
+
+    POST /api/catfood/likes/check/
+    Body: {"catfood_id": 1}
+    """
+    try:
+        user = get_current_user(request)
+        data = json.loads(request.body)
+        catfood_id = data.get("catfood_id")
+
+        if not catfood_id:
+            return JsonResponse({"error": "catfood_id is required"}, status=400)
+
+        # 检查是否已点赞
+        existing = (
+            supabase_admin.table("catfood_likes")
+            .select("id")
+            .eq("user_id", user.id)
+            .eq("catfood_id", catfood_id)
+            .execute()
+        )
+
+        return JsonResponse({"liked": bool(existing.data)})
+
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON format"}, status=400)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_catfood_likes_count(request, catfood_id):
+    """
+    获取猫粮的点赞数量
+
+    GET /api/catfood/likes/count/<catfood_id>/
+    """
+    try:
+        # 查询点赞数量
+        result = (
+            supabase_admin.table("catfood_likes")
+            .select("id", count="exact")
+            .eq("catfood_id", catfood_id)
+            .execute()
+        )
+
+        return JsonResponse({"catfood_id": catfood_id, "likes_count": result.count or 0})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+# ==================== 条形码功能 ====================
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_catfood_by_barcode(request):
+    """
+    通过条形码查询猫粮
+
+    GET /api/catfood/by-barcode/?barcode=1234567890
+    """
+    try:
+        barcode = request.GET.get("barcode", "").strip()
+
+        if not barcode:
+            return JsonResponse({"error": "Barcode is required"}, status=400)
+
+        # 查询猫粮
+        result = supabase_admin.table("catfoods").select("*").eq("barcode", barcode).execute()
+
+        if not result.data:
+            return JsonResponse({"error": "Catfood not found"}, status=404)
+
+        return JsonResponse({"catfood": result.data[0]})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@require_auth
+def scan_barcode(request):
+    """
+    扫描条形码（通过 OCR 识别图片中的条形码）
+
+    POST /api/catfood/scan-barcode/
+    Body: multipart/form-data with "image" file
+    """
+    try:
+        if "image" not in request.FILES:
+            return JsonResponse({"error": "Image file is required"}, status=400)
+
+        image_file = request.FILES["image"]
+
+        # 检查文件类型
+        allowed_types = ["image/jpeg", "image/png", "image/jpg"]
+        if image_file.content_type not in allowed_types:
+            return JsonResponse({"error": "Invalid file type. Only JPEG, PNG allowed"}, status=400)
+
+        # 检查文件大小（最大 5MB）
+        if image_file.size > 5 * 1024 * 1024:
+            return JsonResponse({"error": "File too large. Maximum size is 5MB"}, status=400)
+
+        # TODO: 集成条形码识别库（如 pyzbar）
+        # 目前返回提示信息
+        return JsonResponse(
+            {
+                "error": "Barcode scanning not yet implemented",
+                "message": "Please use the barcode query API with a known barcode",
+            },
+            status=501,
+        )
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+# ==================== 猫粮评论快捷接口 ====================
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_catfood_comments(request, catfood_id):
+    """
+    获取猫粮的所有评论
+
+    GET /api/catfood/<catfood_id>/comments/
+    Query params:
+        - page: 页码（默认1）
+        - per_page: 每页数量（默认20）
+    """
+    try:
+        page = int(request.GET.get("page", 1))
+        per_page = int(request.GET.get("per_page", 20))
+        offset = (page - 1) * per_page
+
+        # 检查猫粮是否存在
+        catfood = (
+            supabase_admin.table("catfoods").select("id").eq("id", catfood_id).single().execute()
+        )
+
+        if not catfood.data:
+            return JsonResponse({"error": "Catfood not found"}, status=404)
+
+        # 查询评论，并关联用户信息
+        result = (
+            supabase_admin.table("comments")
+            .select("*, user:profiles(id, username, avatar_url)")
+            .eq("target_type", "catfood")
+            .eq("target_id", catfood_id)
+            .order("created_at", desc=True)
+            .range(offset, offset + per_page - 1)
+            .execute()
+        )
+
+        # 获取总数
+        count_result = (
+            supabase_admin.table("comments")
+            .select("id", count="exact")
+            .eq("target_type", "catfood")
+            .eq("target_id", catfood_id)
+            .execute()
+        )
+
+        return JsonResponse(
+            {
+                "comments": result.data,
+                "total": count_result.count or 0,
+                "page": page,
+                "per_page": per_page,
+            }
+        )
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)

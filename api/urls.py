@@ -57,6 +57,28 @@ urlpatterns = [
         catfood_views.get_catfood_ratings,
         name="get_catfood_ratings",
     ),
+    # 猫粮点赞
+    path("catfood/likes/", catfood_views.list_catfood_likes, name="list_catfood_likes"),
+    path("catfood/likes/", catfood_views.like_catfood, name="like_catfood"),
+    path("catfood/likes/<int:like_id>/", catfood_views.unlike_catfood, name="unlike_catfood"),
+    path("catfood/likes/toggle/", catfood_views.toggle_like_catfood, name="toggle_like_catfood"),
+    path("catfood/likes/check/", catfood_views.check_like_status, name="check_like_status"),
+    path(
+        "catfood/likes/count/<int:catfood_id>/",
+        catfood_views.get_catfood_likes_count,
+        name="get_catfood_likes_count",
+    ),
+    # 条形码功能
+    path(
+        "catfood/by-barcode/", catfood_views.get_catfood_by_barcode, name="get_catfood_by_barcode"
+    ),
+    path("catfood/scan-barcode/", catfood_views.scan_barcode, name="scan_barcode"),
+    # 猫粮评论快捷接口
+    path(
+        "catfood/<int:catfood_id>/comments/",
+        catfood_views.get_catfood_comments,
+        name="get_catfood_comments",
+    ),
     # ==================== 论坛相关 ====================
     path("posts/", forum_views.list_posts, name="list_posts"),
     path("posts/create/", forum_views.create_post, name="create_post"),
