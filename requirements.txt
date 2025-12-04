@@ -1,31 +1,27 @@
 # Django 核心
-Django==5.0.0
-django-cors-headers==4.3.1
-python-dotenv==1.0.1
+Django>=5.2.0,<6.0.0
+django-cors-headers>=4.3.0,<5.0.0
+python-dotenv>=1.0.0,<2.0.0
 
-# Supabase 相关
-supabase==2.3.4
-postgrest-py==0.10.6
-realtime==1.0.5
-storage3==0.7.4
-supafunc==0.3.3
-gotrue==2.3.0
+# Supabase 相关（使用兼容版本）
+supabase>=2.0.0,<3.0.0
 
 # 图片处理
-Pillow==10.2.0
+Pillow>=11.3.0,<12.0.0
+opencv-contrib-python>=4.10.0,<5.0.0
+numpy>=2.0.2,<3.0.0
 
-# 数据库（MySQL 客户端，可选）
-mysqlclient==2.2.4
-
-# OCR 相关
-paddlepaddle==2.6.1
-paddleocr==2.7.3
+# OCR 相关（Google Tesseract OCR）
+pytesseract>=0.3.10,<1.0.0
 
 # AI 相关
-openai==1.12.0
+openai>=1.59.6,<2.0.0
 
 # HTTP 请求
-requests==2.31.0
+requests>=2.32.5,<3.0.0
 
 # WSGI 服务器
-gunicorn==21.2.0
+gunicorn>=21.2.0,<22.0.0
+
+# 其他工具
+python-dateutil>=2.9.0,<3.0.0

@@ -1,38 +1,30 @@
 """
 OCR 识别相关 API
-使用 PaddleOCR 进行文字识别
+使用 Google Tesseract OCR 进行文字识别
 """
+
+import os
 
 import cv2
 import numpy as np
+import pytesseract
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-from paddleocr import PaddleOCR
 
 from middleware.supabase_auth import require_auth
 
-# 初始化 PaddleOCR（全局单例，避免重复加载模型）
-ocr_engine = None
-
-
-def get_ocr_engine():
-    """获取 OCR 引擎实例（懒加载）"""
-    global ocr_engine
-    if ocr_engine is None:
-        ocr_engine = PaddleOCR(
-            lang="ch",  # 中文识别
-            use_angle_cls=False,  # 关闭方向分类，提速
-            show_log=False,  # 关闭日志输出
-        )
-    return ocr_engine
+# 从环境变量读取 Tesseract 路径（可选）
+TESSERACT_CMD = os.getenv("TESSERACT_CMD")
+if TESSERACT_CMD:
+    pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
 
 
 def preprocess_image(image_bytes):
     """
-    图片预处理：压缩尺寸→灰度化→增强对比度
+    图片预处理：压缩尺寸→灰度化→去噪→二值化
     输入：图片字节数据
-    输出：适配 OCR 的 numpy.ndarray（BGR 格式）
+    输出：PIL Image 对象（适配 Tesseract）
     """
     # 1. 将字节数据转换为 numpy 数组
     nparr = np.frombuffer(image_bytes, np.uint8)
@@ -41,8 +33,8 @@ def preprocess_image(image_bytes):
     if img is None:
         raise ValueError("图片解码失败")
 
-    # 2. 按比例压缩（最长边不超过 1000px）
-    max_size = 1000
+    # 2. 按比例压缩（最长边不超过 2000px，Tesseract 对大图效果更好）
+    max_size = 2000
     height, width = img.shape[:2]
     if max(height, width) > max_size:
         scale = max_size / max(height, width)
@@ -53,13 +45,18 @@ def preprocess_image(image_bytes):
     # 3. 转为灰度图
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # 4. 自适应阈值增强（突出文本）
-    threshold = cv2.adaptiveThreshold(
-        gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 11, 2
+    # 4. 去噪
+    denoised = cv2.fastNlMeansDenoising(gray, None, 10, 7, 21)
+
+    # 5. 自适应阈值二值化（Tesseract 对二值图效果更好）
+    binary = cv2.adaptiveThreshold(
+        denoised, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2
     )
 
-    # 5. 转回 BGR 格式（PaddleOCR 要求）
-    return cv2.cvtColor(threshold, cv2.COLOR_GRAY2BGR)
+    # 6. 转换为 PIL Image（pytesseract 接受 PIL Image）
+    pil_image = Image.fromarray(binary)
+
+    return pil_image
 
 
 @csrf_exempt
@@ -82,11 +79,15 @@ def ocr_recognize(request):
         # 检查文件类型
         allowed_types = ["image/jpeg", "image/png", "image/jpg"]
         if image_file.content_type not in allowed_types:
-            return JsonResponse({"error": "Invalid file type. Only JPEG, PNG allowed"}, status=400)
+            return JsonResponse(
+                {"error": "Invalid file type. Only JPEG, PNG allowed"}, status=400
+            )
 
         # 检查文件大小 (10MB)
         if image_file.size > 10 * 1024 * 1024:
-            return JsonResponse({"error": "File too large. Maximum size is 10MB"}, status=400)
+            return JsonResponse(
+                {"error": "File too large. Maximum size is 10MB"}, status=400
+            )
 
         # 读取图片数据
         image_bytes = image_file.read()
@@ -94,52 +95,50 @@ def ocr_recognize(request):
         # 图片预处理
         processed_img = preprocess_image(image_bytes)
 
-        # 执行 OCR 识别
-        ocr = get_ocr_engine()
-        result = ocr.ocr(processed_img)
+        # 执行 OCR 识别（使用 Tesseract）
+        # 配置参数：
+        # --oem 3: 使用默认 OCR 引擎模式（基于 LSTM）
+        # --psm 3: 自动页面分割，无方向和脚本检测（默认）
+        custom_config = r"--oem 3 --psm 3"
+
+        # 获取详细的识别结果（包含置信度和位置信息）
+        data = pytesseract.image_to_data(
+            processed_img,
+            lang="chi_sim+eng",  # 中英文混合识别
+            config=custom_config,
+            output_type=pytesseract.Output.DICT,
+        )
 
         # 处理识别结果
-        if not result or not result[0]:
-            return JsonResponse(
-                {
-                    "result": {
-                        "text": "",
-                        "confidence": 0.0,
-                        "detected_items": [],
-                    }
-                }
-            )
-
-        # 提取文本和置信度
         detected_items = []
-        all_texts = []
+        n_boxes = len(data["text"])
 
-        for line in result[0]:
-            if isinstance(line, (list, tuple)) and len(line) >= 2:
-                text = line[1][0] if isinstance(line[1], (list, tuple)) else str(line[1])
-                confidence = (
-                    line[1][1] if isinstance(line[1], (list, tuple)) and len(line[1]) > 1 else 1.0
-                )
+        for i in range(n_boxes):
+            # 过滤掉空文本和置信度为 -1 的结果
+            if int(data["conf"][i]) > 0:  # 置信度 > 0 才认为是有效识别
+                text = data["text"][i].strip()
+                if text:  # 非空文本
+                    detected_items.append(
+                        {
+                            "text": text,
+                            "confidence": float(data["conf"][i])
+                            / 100.0,  # Tesseract 返回 0-100，转换为 0-1
+                        }
+                    )
 
-                detected_items.append({"text": text, "confidence": float(confidence)})
-                all_texts.append(text)
+        # 如果没有识别到任何文本，返回空结果
+        if not detected_items:
+            return JsonResponse({"result": []})
 
-        # 计算平均置信度
-        avg_confidence = (
-            sum(item["confidence"] for item in detected_items) / len(detected_items)
-            if detected_items
-            else 0.0
-        )
+        return JsonResponse({"result": detected_items})
 
+    except pytesseract.TesseractNotFoundError:
         return JsonResponse(
             {
-                "result": {
-                    "text": "\n".join(all_texts),
-                    "confidence": avg_confidence,
-                    "detected_items": detected_items,
-                }
-            }
+                "error": "Tesseract OCR not found. Please install Tesseract OCR.",
+                "detail": "Visit https://github.com/tesseract-ocr/tesseract for installation instructions.",
+            },
+            status=500,
         )
-
     except Exception as e:
         return JsonResponse({"error": f"OCR recognition failed: {str(e)}"}, status=500)
