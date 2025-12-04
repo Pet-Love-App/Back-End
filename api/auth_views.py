@@ -306,6 +306,115 @@ def upload_avatar(request):
 
 
 @csrf_exempt
+@require_http_methods(["DELETE"])
+@require_auth
+def delete_avatar(request):
+    """
+    删除头像
+
+    DELETE /api/auth/avatar/
+    """
+    try:
+        user = get_current_user(request)
+
+        # 获取当前头像 URL
+        profile = (
+            supabase_admin.table("profiles")
+            .select("avatar_url")
+            .eq("id", user.id)
+            .single()
+            .execute()
+        )
+
+        if profile.data and profile.data.get("avatar_url"):
+            # 删除 Storage 中的文件
+            from services.supabase_storage import storage_service
+
+            file_path = storage_service.extract_file_path_from_url(
+                profile.data["avatar_url"], storage_service.BUCKETS["avatars"]
+            )
+            if file_path:
+                storage_service.delete_file(storage_service.BUCKETS["avatars"], file_path)
+
+        # 更新 profile，清空头像 URL
+        supabase_admin.table("profiles").update({"avatar_url": None}).eq("id", user.id).execute()
+
+        return JsonResponse({"message": "Avatar deleted successfully"})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@require_auth
+def change_password(request):
+    """
+    修改密码
+
+    POST /api/auth/password/change/
+    Body: {
+        "old_password": "old_password",
+        "new_password": "new_password"
+    }
+    """
+    try:
+        user = get_current_user(request)
+        data = json.loads(request.body)
+
+        old_password = data.get("old_password")
+        new_password = data.get("new_password")
+
+        if not old_password or not new_password:
+            return JsonResponse({"error": "Old password and new password are required"}, status=400)
+
+        # 验证新密码强度
+        if len(new_password) < 6:
+            return JsonResponse({"error": "New password must be at least 6 characters"}, status=400)
+
+        # 验证旧密码（通过重新登录）
+        try:
+            supabase.auth.sign_in_with_password({"email": user.email, "password": old_password})
+        except Exception:
+            return JsonResponse({"error": "Old password is incorrect"}, status=400)
+
+        # 更新密码
+        supabase.auth.update_user({"password": new_password})
+
+        return JsonResponse({"message": "Password changed successfully"})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def reset_password_request(request):
+    """
+    请求重置密码（发送重置邮件）
+
+    POST /api/auth/password/reset/
+    Body: {
+        "email": "user@example.com"
+    }
+    """
+    try:
+        data = json.loads(request.body)
+        email = data.get("email")
+
+        if not email:
+            return JsonResponse({"error": "Email is required"}, status=400)
+
+        # 发送密码重置邮件
+        supabase.auth.reset_password_email(email)
+
+        return JsonResponse({"message": "Password reset email sent successfully"})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 def refresh_token(request):
     """

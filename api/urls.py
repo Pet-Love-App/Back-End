@@ -26,6 +26,9 @@ urlpatterns = [
     path("auth/profile/", auth_views.get_profile, name="auth_profile"),
     path("auth/profile/update/", auth_views.update_profile, name="auth_profile_update"),
     path("auth/avatar/", auth_views.upload_avatar, name="auth_avatar"),
+    path("auth/avatar/delete/", auth_views.delete_avatar, name="auth_avatar_delete"),
+    path("auth/password/change/", auth_views.change_password, name="auth_password_change"),
+    path("auth/password/reset/", auth_views.reset_password_request, name="auth_password_reset"),
     path("auth/refresh/", auth_views.refresh_token, name="auth_refresh"),
     # ==================== 宠物相关 ====================
     path("pets/", pet_views.list_pets, name="list_pets"),
@@ -33,6 +36,7 @@ urlpatterns = [
     path("pets/<int:pet_id>/", pet_views.update_pet, name="update_pet"),
     path("pets/<int:pet_id>/delete/", pet_views.delete_pet, name="delete_pet"),
     path("pets/<int:pet_id>/photo/", pet_views.upload_pet_photo, name="upload_pet_photo"),
+    path("pets/<int:pet_id>/photo/delete/", pet_views.delete_pet_photo, name="delete_pet_photo"),
     # ==================== 猫粮相关 ====================
     # CRUD
     path("catfoods/", catfood_views.list_catfoods, name="list_catfoods"),

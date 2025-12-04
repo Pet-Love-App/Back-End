@@ -6,9 +6,10 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV POETRY_VERSION=1.8.2
-ENV POETRY_HOME="/opt/poetry"
 ENV POETRY_NO_INTERACTION=1
 ENV POETRY_VIRTUALENVS_CREATE=false
+ENV PIP_NO_CACHE_DIR=1
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
 # 使用国内镜像源加速
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources || true
@@ -26,17 +27,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 Poetry
-RUN curl -sSL https://install.python-poetry.org | python3 - && \
-    ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry
+# 配置 pip 使用清华源
+RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
+    pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
 
-# 复制依赖文件
+# 安装 Poetry（使用清华源）
+RUN pip install --no-cache-dir poetry==${POETRY_VERSION}
+
+# 复制依赖文件（利用 Docker 缓存）
 COPY pyproject.toml poetry.lock* ./
 
-# 安装 Python 依赖（使用清华源）
-RUN poetry config repositories.tsinghua https://pypi.tuna.tsinghua.edu.cn/simple && \
+# 配置 Poetry 使用清华源并安装依赖
+RUN poetry config virtualenvs.create false && \
     poetry source add --priority=primary tsinghua https://pypi.tuna.tsinghua.edu.cn/simple && \
-    poetry install --only main --no-root --no-cache
+    poetry install --only main --no-root --no-cache -vvv
 
 # 复制项目代码
 COPY . .

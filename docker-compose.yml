@@ -1,6 +1,4 @@
 # Docker Compose for Pet Love Backend (Supabase)
-version: "3.8"
-
 services:
   web:
     build:

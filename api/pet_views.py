@@ -46,9 +46,11 @@ def list_pets(request):
 @require_auth
 def create_pet(request):
     """
-    创建宠物
+    创建宠物（支持同时上传照片）
 
-    POST /api/pets/
+    方式1 - JSON (不带照片):
+    POST /api/pets/create/
+    Content-Type: application/json
     Body: {
         "name": "小白",
         "species": "cat",
@@ -56,30 +58,85 @@ def create_pet(request):
         "age": 2,
         "description": "很可爱"
     }
+
+    方式2 - multipart/form-data (带照片):
+    POST /api/pets/create/
+    Content-Type: multipart/form-data
+    Body:
+        name: "小白"
+        species: "cat"
+        breed: "英短"
+        age: 2
+        description: "很可爱"
+        photo: (file)
     """
     try:
         user = get_current_user(request)
-        data = json.loads(request.body)
+
+        # 判断是 JSON 还是 multipart/form-data
+        if request.content_type and "multipart/form-data" in request.content_type:
+            # multipart/form-data 方式（带照片）
+            data = request.POST
+            photo_file = request.FILES.get("photo")
+        else:
+            # JSON 方式（不带照片）
+            data = json.loads(request.body)
+            photo_file = None
 
         # 验证必填字段
-        if not data.get("name"):
+        name = data.get("name")
+        if not name:
             return JsonResponse({"error": "Pet name is required"}, status=400)
 
         # 准备数据
         pet_data = {
             "user_id": user.id,
-            "name": data.get("name"),
+            "name": name,
             "species": data.get("species", "cat"),
             "breed": data.get("breed", ""),
-            "age": data.get("age"),
+            "age": int(data.get("age")) if data.get("age") else None,
             "description": data.get("description", ""),
         }
 
         # 插入到 Supabase
         result = supabase_admin.table("pets").insert(pet_data).execute()
+        pet_id = result.data[0]["id"]
+
+        # 如果有照片，上传照片
+        photo_url = None
+        if photo_file:
+            # 检查文件类型
+            allowed_types = ["image/jpeg", "image/png", "image/jpg", "image/webp"]
+            if photo_file.content_type not in allowed_types:
+                # 删除刚创建的宠物记录
+                supabase_admin.table("pets").delete().eq("id", pet_id).execute()
+                return JsonResponse(
+                    {"error": "Invalid file type. Only JPEG, PNG, WEBP allowed"}, status=400
+                )
+
+            # 检查文件大小 (5MB)
+            if photo_file.size > 5 * 1024 * 1024:
+                # 删除刚创建的宠物记录
+                supabase_admin.table("pets").delete().eq("id", pet_id).execute()
+                return JsonResponse({"error": "File too large. Maximum size is 5MB"}, status=400)
+
+            # 上传照片
+            file_extension = photo_file.name.split(".")[-1]
+            photo_url = storage_service.upload_pet_photo(
+                user.id, pet_id, photo_file.read(), file_extension
+            )
+
+            # 更新宠物记录的照片 URL
+            supabase_admin.table("pets").update({"photo_url": photo_url}).eq("id", pet_id).execute()
+            result.data[0]["photo_url"] = photo_url
 
         return JsonResponse(
-            {"message": "Pet created successfully", "pet": result.data[0]}, status=201
+            {
+                "message": "Pet created successfully",
+                "pet": result.data[0],
+                "photo_url": photo_url,
+            },
+            status=201,
         )
 
     except Exception as e:
@@ -218,6 +275,48 @@ def upload_pet_photo(request, pet_id):
         supabase_admin.table("pets").update({"photo_url": photo_url}).eq("id", pet_id).execute()
 
         return JsonResponse({"message": "Photo uploaded successfully", "photo_url": photo_url})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["DELETE"])
+@require_auth
+def delete_pet_photo(request, pet_id):
+    """
+    删除宠物照片
+
+    DELETE /api/pets/<pet_id>/photo/
+    """
+    try:
+        user = get_current_user(request)
+
+        # 验证宠物所有权
+        pet = (
+            supabase_admin.table("pets")
+            .select("*")
+            .eq("id", pet_id)
+            .eq("user_id", user.id)
+            .single()
+            .execute()
+        )
+
+        if not pet.data:
+            return JsonResponse({"error": "Pet not found"}, status=404)
+
+        # 删除 Storage 中的照片
+        if pet.data.get("photo_url"):
+            file_path = storage_service.extract_file_path_from_url(
+                pet.data["photo_url"], storage_service.BUCKETS["pets"]
+            )
+            if file_path:
+                storage_service.delete_file(storage_service.BUCKETS["pets"], file_path)
+
+        # 更新宠物记录，清空照片 URL
+        supabase_admin.table("pets").update({"photo_url": None}).eq("id", pet_id).execute()
+
+        return JsonResponse({"message": "Pet photo deleted successfully"})
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
