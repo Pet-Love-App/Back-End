@@ -247,20 +247,25 @@ def save_report(request):
                 {"error": "catfood_id and content are required"}, status=400
             )
 
-        # 检查是否已存在报告
+        # 检查是否已存在报告（每个猫粮只有一条报告）
         existing = (
             supabase_admin.table("ai_analysis_reports")
             .select("id")
             .eq("catfood_id", catfood_id)
-            .eq("user_id", user.id)
             .execute()
         )
 
+        # 构建报告数据（不包含 user_id，因为报告是公共的）
         report_data = {
             "catfood_id": catfood_id,
-            "user_id": user.id,
-            "content": content,
-            "analysis_data": data.get("analysis_data", {}),
+            "ingredients_text": content,
+            "safety": data.get("safety"),
+            "nutrient": data.get("nutrient"),
+            "percentage": data.get("percentage", False),
+            "percent_data": data.get("percent_data", {}),
+            "tags": data.get("tags", []),
+            "additives": data.get("additives", []),
+            "ingredients": data.get("ingredients", []),
         }
 
         if existing.data:
@@ -299,12 +304,11 @@ def get_report(request, catfood_id):
     try:
         user = get_current_user(request)
 
-        # 查询报告
+        # 查询报告（报告是公共的，不需要检查 user_id）
         report_result = (
             supabase_admin.table("ai_analysis_reports")
             .select("*, catfood:catfoods(*)")
             .eq("catfood_id", catfood_id)
-            .eq("user_id", user.id)
             .execute()
         )
         report_data, error = safe_single(report_result, "Report not found")
@@ -329,12 +333,11 @@ def check_report_exists(request, catfood_id):
     try:
         user = get_current_user(request)
 
-        # 检查是否存在
+        # 检查是否存在（报告是公共的）
         report = (
             supabase_admin.table("ai_analysis_reports")
             .select("id")
             .eq("catfood_id", catfood_id)
-            .eq("user_id", user.id)
             .execute()
         )
 
@@ -358,12 +361,11 @@ def delete_report(request, catfood_id):
     try:
         user = get_current_user(request)
 
-        # 查找报告
+        # 查找报告（报告是公共的）
         report_result = (
             supabase_admin.table("ai_analysis_reports")
             .select("id")
             .eq("catfood_id", catfood_id)
-            .eq("user_id", user.id)
             .execute()
         )
         report_data, error = safe_single(report_result, "Report not found")
