@@ -18,18 +18,9 @@ Including another URLconf
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.http import JsonResponse
 from django.urls import include, path
 
-
-def health_check(request):
-    """健康检查端点 - 用于 Docker 健康检查和负载均衡"""
-    return JsonResponse({"status": "ok", "service": "Pet Love Backend"})
-
-
 urlpatterns = [
-    # 健康检查端点
-    path("health/", health_check, name="health_check"),
     # Django Admin（仅用于管理）
     path("admin/", admin.site.urls),
     # 统一 API 路由（所有 API 都通过 api.urls 管理）

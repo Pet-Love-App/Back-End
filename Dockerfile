@@ -11,7 +11,7 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 # 使用国内镜像源加速
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources || true
 
-# 安装系统依赖（包括 Tesseract OCR 用于文字识别）
+# 安装系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
@@ -20,14 +20,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     netcat-openbsd \
     libjpeg-dev \
     zlib1g-dev \
-    libgl1 \
-    libglib2.0-0 \
-    libgomp1 \
     default-libmysqlclient-dev \
     pkg-config \
-    tesseract-ocr \
-    tesseract-ocr-chi-sim \
-    tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 # 配置 pip 使用清华源
@@ -58,7 +52,7 @@ EXPOSE 8000
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/api/auth/login/ || exit 1
+    CMD curl -f http://localhost:8000/health/ || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gunicorn", "back_end.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120"]

@@ -159,7 +159,7 @@ urlpatterns = [
         name="like_comment",
     ),
     # ==================== AI 报告相关 ====================
-    path("ai/llm/chat", ai_report_views.llm_chat, name="ai_llm_chat"),
+    path("ai/llm/chat/", ai_report_views.llm_chat, name="ai_llm_chat"),
     path("ai/save/", ai_report_views.save_report, name="ai_save_report"),
     path("ai/<int:catfood_id>/", ai_report_views.get_report, name="ai_get_report"),
     path(
