@@ -68,6 +68,21 @@ def register(request):
         # Profile 和 Reputation 由数据库触发器自动创建
         # 无需在这里手动插入
 
+        # 检查 session 是否存在（可能需要邮箱验证）
+        if not auth_response.session:
+            return JsonResponse(
+                {
+                    "message": "Registration successful, please verify your email",
+                    "user": {
+                        "id": auth_response.user.id,
+                        "email": auth_response.user.email,
+                        "username": username,
+                    },
+                    "session": None,
+                },
+                status=201,
+            )
+
         return JsonResponse(
             {
                 "message": "Registration successful",
@@ -126,6 +141,9 @@ def login(request):
 
         if not auth_response.user:
             return JsonResponse({"error": "Invalid credentials"}, status=401)
+
+        if not auth_response.session:
+            return JsonResponse({"error": "Please verify your email first"}, status=401)
 
         # 获取用户 profile
         profile_result = (
