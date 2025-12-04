@@ -572,54 +572,35 @@ def get_catfood_ratings(request, catfood_id):
 
 
 @csrf_exempt
-@require_http_methods(["GET"])
+@require_http_methods(["GET", "POST"])
 @require_auth
-def list_catfood_likes(request):
+def catfood_likes(request):
     """
-    获取用户的点赞列表
-
-    GET /api/catfood/likes/
+    GET /api/catfood/likes/   -> 获取点赞列表
+    POST /api/catfood/likes/  -> 点赞猫粮
     """
     try:
         user = get_current_user(request)
 
-        # 查询点赞，并关联猫粮信息
-        result = (
-            supabase_admin.table("catfood_likes")
-            .select("*, catfood:catfoods(*)")
-            .eq("user_id", user.id)
-            .order("created_at", desc=True)
-            .execute()
-        )
+        if request.method == "GET":
+            result = (
+                supabase_admin.table("catfood_likes")
+                .select("*, catfood:catfoods(*)")
+                .eq("user_id", user.id)
+                .order("created_at", desc=True)
+                .execute()
+            )
+            return JsonResponse({"likes": result.data})
 
-        return JsonResponse({"likes": result.data})
-
-    except Exception as e:
-        return JsonResponse({"error": str(e)}, status=500)
-
-
-@csrf_exempt
-@require_http_methods(["POST"])
-@require_auth
-def like_catfood(request):
-    """
-    点赞猫粮
-
-    POST /api/catfood/likes/
-    Body: {"catfood_id": 1}
-    """
-    try:
-        user = get_current_user(request)
         try:
             data = parse_json_body(request)
         except ValueError:
             return JsonResponse({"error": "Invalid JSON body"}, status=400)
-        catfood_id = data.get("catfood_id")
 
+        catfood_id = data.get("catfood_id")
         if not catfood_id:
             return JsonResponse({"error": "catfood_id is required"}, status=400)
 
-        # 检查猫粮是否存在
         catfood_result = (
             supabase_admin.table("catfoods").select("id").eq("id", catfood_id).execute()
         )
@@ -627,7 +608,6 @@ def like_catfood(request):
         if error:
             return JsonResponse({"error": error}, status=404)
 
-        # 检查是否已点赞
         existing = (
             supabase_admin.table("catfood_likes")
             .select("id")
@@ -635,14 +615,11 @@ def like_catfood(request):
             .eq("catfood_id", catfood_id)
             .execute()
         )
-
         if existing.data:
             return JsonResponse({"error": "Already liked"}, status=400)
 
-        # 创建点赞
         like_data = {"user_id": user.id, "catfood_id": catfood_id}
         result = supabase_admin.table("catfood_likes").insert(like_data).execute()
-
         return JsonResponse(
             {"message": "Liked successfully", "like": result.data[0]}, status=201
         )

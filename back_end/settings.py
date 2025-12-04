@@ -60,7 +60,7 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",  # CORS 中间件
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
+    # "django.middleware.csrf.CsrfViewMiddleware",  # 禁用 CSRF（API 使用 JWT 认证）
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
