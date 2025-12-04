@@ -361,11 +361,27 @@ def update_catfood(request, catfood_id):
             "percent_data", None
         )
         if percent_data and isinstance(percent_data, dict):
-            # 将 percent_data 的各个字段添加到 payload 中
-            for key, value in percent_data.items():
-                # 确保字段名在允许的字段中
-                if key in allowed_fields:
-                    payload[key] = value
+            # 字段名映射表：AI返回的简短字段名 -> 数据库完整字段名
+            field_mapping = {
+                "protein": "crude_protein",
+                "fat": "crude_fat",
+                "fiber": "crude_fiber",
+                "ash": "crude_ash",
+                # 这些字段名相同，无需映射
+                "crude_protein": "crude_protein",
+                "crude_fat": "crude_fat",
+                "crude_fiber": "crude_fiber",
+                "crude_ash": "crude_ash",
+                "carbohydrates": "carbohydrates",
+                "others": "others",
+                "moisture": "moisture",
+            }
+
+            # 将 percent_data 的各个字段添加到 payload 中（带字段名映射）
+            for ai_key, db_key in field_mapping.items():
+                if ai_key in percent_data and percent_data[ai_key] is not None:
+                    if db_key in allowed_fields:
+                        payload[db_key] = percent_data[ai_key]
 
         # 筛选出允许更新的字段
         update_data = {
@@ -630,7 +646,22 @@ def get_user_favorites(request):
             .execute()
         )
 
-        return JsonResponse({"favorites": result.data})
+        # 转换字段名：将嵌套的 catfood 对象中的 image_url 转换为 imageUrl
+        favorites_data = result.data
+        for favorite in favorites_data:
+            if favorite.get("catfood") and isinstance(favorite["catfood"], dict):
+                catfood = favorite["catfood"]
+                # 转换字段名（蛇形 -> 驼峰）
+                if "image_url" in catfood:
+                    catfood["imageUrl"] = catfood.pop("image_url")
+                if "count_num" in catfood:
+                    catfood["countNum"] = catfood.pop("count_num")
+                if "created_at" in catfood:
+                    catfood["createdAt"] = catfood.pop("created_at")
+                if "updated_at" in catfood:
+                    catfood["updatedAt"] = catfood.pop("updated_at")
+
+        return JsonResponse({"favorites": favorites_data})
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)

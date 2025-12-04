@@ -508,18 +508,28 @@ def save_report(request):
         }
 
         # 处理 percent_data：将其解包到各个营养成分字段
+        # 需要处理字段名映射（AI 返回的简短名称 vs 数据库完整名称）
         percent_data = data.get("percent_data", {})
         if percent_data and isinstance(percent_data, dict):
-            for key in [
-                "crude_protein",
-                "crude_fat",
-                "carbohydrates",
-                "crude_fiber",
-                "crude_ash",
-                "others",
-            ]:
-                if key in percent_data:
-                    catfood_update_data[key] = percent_data[key]
+            # 字段名映射表：AI返回的字段名 -> 数据库字段名
+            field_mapping = {
+                "protein": "crude_protein",
+                "fat": "crude_fat",
+                "fiber": "crude_fiber",
+                "ash": "crude_ash",
+                # 这些字段名相同，无需映射
+                "crude_protein": "crude_protein",
+                "crude_fat": "crude_fat",
+                "crude_fiber": "crude_fiber",
+                "crude_ash": "crude_ash",
+                "carbohydrates": "carbohydrates",
+                "others": "others",
+                "moisture": "moisture",
+            }
+
+            for ai_key, db_key in field_mapping.items():
+                if ai_key in percent_data and percent_data[ai_key] is not None:
+                    catfood_update_data[db_key] = percent_data[ai_key]
 
         # 更新 catfoods 表
         supabase_admin.table("catfoods").update(catfood_update_data).eq(
