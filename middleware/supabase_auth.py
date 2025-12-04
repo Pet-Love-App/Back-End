@@ -20,7 +20,10 @@ class SupabaseAuthMiddleware(MiddlewareMixin):
 
         # 跳过不需要认证的路径
         exempt_paths = [
-            "/api/auth/",
+            "/api/auth/register/",  # 注册
+            "/api/auth/login/",  # 登录
+            "/api/auth/refresh/",  # 刷新 token
+            "/api/auth/reset-password/",  # 重置密码
             "/admin/",
             "/api/catfoods/",  # 猫粮列表公开
             "/api/search/",  # 搜索公开
@@ -44,7 +47,9 @@ class SupabaseAuthMiddleware(MiddlewareMixin):
         try:
             scheme, token = auth_header.split()
             if scheme.lower() != "bearer":
-                return JsonResponse({"error": "Invalid authorization scheme"}, status=401)
+                return JsonResponse(
+                    {"error": "Invalid authorization scheme"}, status=401
+                )
         except ValueError:
             return JsonResponse({"error": "Invalid authorization header"}, status=401)
 
@@ -120,7 +125,9 @@ def require_admin(view_func):
                 return JsonResponse({"error": "Admin access required"}, status=403)
 
         except Exception as e:
-            return JsonResponse({"error": f"Failed to verify admin status: {str(e)}"}, status=500)
+            return JsonResponse(
+                {"error": f"Failed to verify admin status: {str(e)}"}, status=500
+            )
 
         return view_func(request, *args, **kwargs)
 
