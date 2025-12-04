@@ -1,60 +1,62 @@
-# Dockerfile
-FROM python:3.11-slim
+# Dockerfile for Pet Love Backend (Supabase)
+FROM python:3.10-slim
 
 WORKDIR /app
 
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 ENV POETRY_VERSION=1.8.2
+ENV POETRY_HOME="/opt/poetry"
+ENV POETRY_NO_INTERACTION=1
+ENV POETRY_VIRTUALENVS_CREATE=false
 
-# 使用国内 Debian 镜像源（加速系统包下载）
-RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources
+# 使用国内镜像源加速
+RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources || true
 
 # 安装系统依赖
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
-    default-libmysqlclient-dev \
-    pkg-config \
+    g++ \
     curl \
     netcat-openbsd \
     libjpeg-dev \
     zlib1g-dev \
     libgl1 \
     libglib2.0-0 \
+    libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装Poetry（使用清华源）
-RUN pip install "poetry==$POETRY_VERSION" -i https://pypi.tuna.tsinghua.edu.cn/simple
+# 安装 Poetry
+RUN curl -sSL https://install.python-poetry.org | python3 - && \
+    ln -s /opt/poetry/bin/poetry /usr/local/bin/poetry
 
-# 配置Poetry不使用虚拟环境
-RUN poetry config virtualenvs.create false
-
-# 复制Poetry配置文件
+# 复制依赖文件
 COPY pyproject.toml poetry.lock* ./
 
-# 安装生产依赖（使用pip和清华源，避免Poetry网络问题）
-RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
-    django==5.2.0 \
-    djangorestframework==3.15.0 \
-    django-cors-headers==4.3.0 \
-    mysqlclient==2.1.0 \
-    djangorestframework-simplejwt==5.5.1 \
-    djoser==2.3.3 \
-    "pydantic[email]==2.12.3" \
-    pillow==11.3.0 \
-    python-dotenv==1.0.0 \
-    gunicorn==21.2.0 \
-    requests==2.32.5 \
-    paddleocr==3.3.1 \
-    paddlepaddle==3.2.1 \
-    opencv-contrib-python==4.10.0.84 \
-    numpy==2.0.2
+# 安装 Python 依赖（使用清华源）
+RUN poetry config repositories.tsinghua https://pypi.tuna.tsinghua.edu.cn/simple && \
+    poetry source add --priority=primary tsinghua https://pypi.tuna.tsinghua.edu.cn/simple && \
+    poetry install --only main --no-root --no-cache
 
 # 复制项目代码
 COPY . .
+
+# 创建必要的目录
+RUN mkdir -p staticfiles media logs
+
+# 收集静态文件
+RUN python manage.py collectstatic --noinput || true
 
 # 复制并设置入口脚本
 COPY scripts/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
+# 暴露端口
+EXPOSE 8000
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8000/api/auth/login/ || exit 1
+
 ENTRYPOINT ["/entrypoint.sh"]
+CMD ["gunicorn", "back_end.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120"]

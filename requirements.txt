@@ -1,0 +1,39 @@
+# Supabase 相关依赖
+supabase==2.3.4
+postgrest-py==0.13.2
+realtime==1.0.5
+storage3==0.7.4
+supafunc==0.3.3
+gotrue==2.3.0
+
+# 现有依赖保持不变
+# Django 核心
+Django==5.2.7
+djangorestframework==3.15.2
+django-cors-headers==4.6.0
+python-dotenv==1.0.1
+
+# Supabase
+supabase==2.3.4
+postgrest-py==0.13.2
+realtime==1.0.5
+storage3==0.7.4
+supafunc==0.3.3
+gotrue==2.3.0
+
+# 图片处理（仅用于旧代码兼容）
+Pillow==11.0.0
+
+# 数据库（可选，用于访问旧的 MySQL 数据）
+mysqlclient==2.2.6
+
+# OCR 相关
+paddlepaddle==2.6.2
+paddleocr==2.9.1
+
+# AI 相关
+openai==1.59.6
+
+# 其他工具
+requests==2.32.3
+

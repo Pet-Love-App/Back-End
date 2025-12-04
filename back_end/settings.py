@@ -11,7 +11,6 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
 import os
-from datetime import timedelta
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -24,6 +23,11 @@ try:
     load_dotenv(BASE_DIR / ".env")
 except ImportError:
     pass  # 如果没有安装 python-dotenv，跳过
+
+# Supabase 配置
+SUPABASE_URL = os.getenv("SUPABASE_URL", "")
+SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
+SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
 
 # Quick-start development settings - unsuitable for production
@@ -41,27 +45,14 @@ ALLOWED_HOSTS = ["82.157.255.92", "localhost", "127.0.0.1"]
 # Application definition
 
 INSTALLED_APPS = [
-    # 自建应用
-    "additive",
-    "user",  # 用户管理（头像、宠物）
-    "ai_report",
-    "ocr",  # OCR 识别
-    "catfood",  # 猫粮管理
-    "forum",  # 论坛系统（帖子、通知）
-    "comment",  # 评论系统
-    "corsheaders",  # CORS 支持
+    # Django 核心应用
+    "corsheaders",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    # 用户认证
-    "rest_framework",
-    "rest_framework_simplejwt",
-    "rest_framework_simplejwt.token_blacklist",
-    "djoser",
-    "reputation",  # 信誉系统
 ]
 
 MIDDLEWARE = [
@@ -73,6 +64,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "middleware.supabase_auth.SupabaseAuthMiddleware",  # Supabase 认证中间件
 ]
 
 # CORS 配置
@@ -82,43 +74,11 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 REST_FRAMEWORK = {
-    "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
-    ),
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
-}
-
-# Simple JWT 配置
-SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(days=7),
-    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
-    "ROTATE_REFRESH_TOKENS": True,
-    "BLACKLIST_AFTER_ROTATION": True,
-    "UPDATE_LAST_LOGIN": True,
-}
-
-# Djoser 配置
-DJOSER = {
-    "LOGIN_FIELD": "username",
-    "USER_CREATE_PASSWORD_RETYPE": True,
-    "USERNAME_CHANGED_EMAIL_CONFIRMATION": False,
-    "PASSWORD_CHANGED_EMAIL_CONFIRMATION": False,
-    "SEND_CONFIRMATION_EMAIL": False,
-    "SEND_ACTIVATION_EMAIL": False,
-    "SET_USERNAME_RETYPE": True,
-    "SET_PASSWORD_RETYPE": True,
-    "PASSWORD_RESET_CONFIRM_URL": "password/reset/confirm/{uid}/{token}",
-    "USERNAME_RESET_CONFIRM_URL": "username/reset/confirm/{uid}/{token}",
-    "ACTIVATION_URL": "activate/{uid}/{token}",
-    "SERIALIZERS": {
-        "user_create": "back_end.serializers.CustomUserCreateSerializer",
-        "set_password": "back_end.serializers.CustomSetPasswordSerializer",
-        "current_user": "djoser.serializers.UserSerializer",
-    },
 }
 
 ROOT_URLCONF = "back_end.urls"

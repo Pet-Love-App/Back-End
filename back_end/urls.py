@@ -21,25 +21,10 @@ from django.contrib import admin
 from django.urls import include, path
 
 urlpatterns = [
+    # Django Admin（仅用于管理）
     path("admin/", admin.site.urls),
-    path("additive/", include("additive.urls")),
-    # 用户认证（注册、登录、JWT）
-    path("api/auth/", include("djoser.urls")),
-    path("api/auth/", include("djoser.urls.jwt")),
-    # 用户资料（头像、宠物）
-    path("api/user/", include("user.urls")),
-    # AI 报告
-    path("api/ai/", include("ai_report.urls")),
-    # OCR 识别
-    path("ocr/", include("ocr.urls")),
-    # 猫粮管理
-    path("api/catfood/", include("catfood.urls")),
-    # 论坛系统（帖子、通知）
-    path("api/forum/", include("forum.urls")),
-    # 评论系统
-    path("api/comments/", include("comment.urls")),
-    # 成分查询
-    path("api/search/", include("api_search.urls")),
+    # 统一 API 路由（所有 API 都通过 api.urls 管理）
+    path("api/", include("api.urls")),
 ]
 
 # 开发环境提供 media 文件访问

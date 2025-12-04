@@ -1,7 +1,0 @@
-{
-"type": "all_of",
-"conditions": [
-{"kind": "profile_has_avatar", "value": true},
-{"kind": "has_pet_count_at_least", "value": 1}
-]
-}
