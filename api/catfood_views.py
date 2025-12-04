@@ -474,6 +474,36 @@ def rate_catfood(request, catfood_id):
 
 
 @csrf_exempt
+@require_http_methods(["GET"])
+@require_auth
+def get_my_rating(request, catfood_id):
+    """
+    获取当前用户对指定猫粮的评分
+
+    GET /api/catfoods/<catfood_id>/my-rating/
+    """
+    try:
+        user = get_current_user(request)
+
+        # 查询用户的评分
+        result = (
+            supabase_admin.table("catfood_ratings")
+            .select("*")
+            .eq("catfood_id", catfood_id)
+            .eq("user_id", user.id)
+            .execute()
+        )
+
+        if result.data:
+            return JsonResponse({"rating": result.data[0]})
+        else:
+            return JsonResponse({"rating": None})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 @require_auth
 def favorite_catfood(request, catfood_id):
