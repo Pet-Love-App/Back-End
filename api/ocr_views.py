@@ -5,6 +5,7 @@ OCR 识别相关 API
 
 import base64
 import os
+import re
 
 import requests
 from django.http import JsonResponse
@@ -153,8 +154,6 @@ def ocr_recognize(request):
             if content:
                 # 将整段文本按逗号、换行、空格等分割成词语
                 # 保持原始的词语顺序
-                import re
-
                 words = re.split(r"[,，\n\s]+", content)
                 for word in words:
                     word = word.strip()
