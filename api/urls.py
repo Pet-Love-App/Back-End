@@ -80,6 +80,11 @@ urlpatterns = [
         name="get_my_rating",
     ),
     path(
+        "catfoods/ratings/<int:rating_id>/",
+        catfood_views.delete_rating,
+        name="delete_rating",
+    ),
+    path(
         "catfoods/<int:catfood_id>/favorite/",
         catfood_views.favorite_catfood,
         name="favorite_catfood",

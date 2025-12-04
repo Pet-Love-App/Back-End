@@ -708,6 +708,41 @@ def get_my_rating(request, catfood_id):
 
 
 @csrf_exempt
+@require_http_methods(["DELETE"])
+@require_auth
+def delete_rating(request, rating_id):
+    """
+    删除评分
+
+    DELETE /api/catfoods/ratings/<rating_id>/
+    """
+    try:
+        user = get_current_user(request)
+
+        # 查询评分，确保是当前用户的评分
+        result = (
+            supabase_admin.table("catfood_ratings")
+            .select("*")
+            .eq("id", rating_id)
+            .eq("user_id", user.id)
+            .execute()
+        )
+
+        if not result.data:
+            return JsonResponse(
+                {"error": "Rating not found or not owned by user"}, status=404
+            )
+
+        # 删除评分
+        supabase_admin.table("catfood_ratings").delete().eq("id", rating_id).execute()
+
+        return JsonResponse({"message": "Rating deleted successfully"})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 @require_auth
 def favorite_catfood(request, catfood_id):
@@ -1031,9 +1066,7 @@ def get_catfood_likes_count(request, catfood_id):
             .execute()
         )
 
-        return JsonResponse(
-            {"catfood_id": catfood_id, "likes_count": result.count or 0}
-        )
+        return JsonResponse({"catfood_id": catfood_id, "like_count": result.count or 0})
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)

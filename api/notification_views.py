@@ -37,7 +37,11 @@ def list_notifications(request):
         offset = (page - 1) * per_page
 
         # 构建查询
-        query = supabase_admin.table("notifications").select("*").eq("user_id", user.id)
+        query = (
+            supabase_admin.table("notifications")
+            .select("*")
+            .eq("recipient_id", user.id)
+        )
 
         # 只显示未读
         if unread_only:
@@ -75,7 +79,7 @@ def get_notification_detail(request, notification_id):
             supabase_admin.table("notifications")
             .select("*")
             .eq("id", notification_id)
-            .eq("user_id", user.id)
+            .eq("recipient_id", user.id)
             .execute()
         )
 
@@ -104,7 +108,7 @@ def get_unread_count(request):
         result = (
             supabase_admin.table("notifications")
             .select("id", count="exact")
-            .eq("user_id", user.id)
+            .eq("recipient_id", user.id)
             .eq("is_read", False)
             .execute()
         )
@@ -134,7 +138,7 @@ def mark_as_read(request, notification_id):
             supabase_admin.table("notifications")
             .select("*")
             .eq("id", notification_id)
-            .eq("user_id", user.id)
+            .eq("recipient_id", user.id)
             .execute()
         )
         _, error = safe_single(notification_result, "Notification not found")
@@ -166,7 +170,7 @@ def mark_all_as_read(request):
 
         # 标记所有为已读
         supabase_admin.table("notifications").update({"is_read": True}).eq(
-            "user_id", user.id
+            "recipient_id", user.id
         ).eq("is_read", False).execute()
 
         return JsonResponse({"message": "All notifications marked as read"})
@@ -192,7 +196,7 @@ def delete_notification(request, notification_id):
             supabase_admin.table("notifications")
             .select("*")
             .eq("id", notification_id)
-            .eq("user_id", user.id)
+            .eq("recipient_id", user.id)
             .execute()
         )
         _, error = safe_single(notification_result, "Notification not found")
@@ -223,7 +227,9 @@ def delete_all_notifications(request):
         user = get_current_user(request)
 
         # 删除所有通知
-        supabase_admin.table("notifications").delete().eq("user_id", user.id).execute()
+        supabase_admin.table("notifications").delete().eq(
+            "recipient_id", user.id
+        ).execute()
 
         return JsonResponse({"message": "All notifications deleted successfully"})
 
@@ -267,7 +273,7 @@ def create_notification(request):
 
         # 准备通知数据
         notification_data = {
-            "user_id": user_id,
+            "recipient_id": user_id,  # 数据库字段名为 recipient_id
             "type": notification_type,
             "title": title,
             "content": content,
