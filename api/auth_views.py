@@ -33,19 +33,31 @@ def register(request):
         username = data.get("username")
 
         if not email or not password or not username:
-            return JsonResponse({"error": "Email, password and username are required"}, status=400)
+            return JsonResponse(
+                {"error": "Email, password and username are required"}, status=400
+            )
 
         # 检查用户名是否已存在
-        existing_profile = (
-            supabase_admin.table("profiles").select("id").eq("username", username).execute()
-        )
-
-        if existing_profile.data:
-            return JsonResponse({"error": "Username already exists"}, status=400)
+        try:
+            existing_profile = (
+                supabase_admin.table("profiles")
+                .select("id")
+                .eq("username", username)
+                .execute()
+            )
+            if existing_profile.data:
+                return JsonResponse({"error": "Username already exists"}, status=400)
+        except Exception as check_error:
+            # 如果查询失败，记录错误但继续注册流程
+            print(f"Username check error: {check_error}")
 
         # 使用 Supabase Auth 注册
         auth_response = supabase.auth.sign_up(
-            {"email": email, "password": password, "options": {"data": {"username": username}}}
+            {
+                "email": email,
+                "password": password,
+                "options": {"data": {"username": username}},
+            }
         )
 
         if not auth_response.user:
@@ -59,7 +71,11 @@ def register(request):
             "is_admin": False,
         }
 
-        supabase_admin.table("profiles").insert(profile_data).execute()
+        try:
+            supabase_admin.table("profiles").insert(profile_data).execute()
+        except Exception as profile_error:
+            print(f"Profile creation error: {profile_error}")
+            # Profile 创建失败不影响注册
 
         # 创建信誉记录
         reputation_data = {
@@ -68,7 +84,13 @@ def register(request):
             "level": "novice",
         }
 
-        supabase_admin.table("reputation_summaries").insert(reputation_data).execute()
+        try:
+            supabase_admin.table("reputation_summaries").insert(
+                reputation_data
+            ).execute()
+        except Exception as rep_error:
+            print(f"Reputation creation error: {rep_error}")
+            # 信誉记录创建失败不影响注册
 
         return JsonResponse(
             {
@@ -86,7 +108,13 @@ def register(request):
             status=201,
         )
 
+    except json.JSONDecodeError:
+        return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
+        import traceback
+
+        error_detail = traceback.format_exc()
+        print(f"Registration error: {error_detail}")
         return JsonResponse({"error": str(e)}, status=500)
 
 
@@ -108,10 +136,14 @@ def login(request):
         password = data.get("password")
 
         if not email or not password:
-            return JsonResponse({"error": "Email and password are required"}, status=400)
+            return JsonResponse(
+                {"error": "Email and password are required"}, status=400
+            )
 
         # 使用 Supabase Auth 登录
-        auth_response = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        auth_response = supabase.auth.sign_in_with_password(
+            {"email": email, "password": password}
+        )
 
         if not auth_response.user:
             return JsonResponse({"error": "Invalid credentials"}, status=401)
@@ -132,8 +164,12 @@ def login(request):
                     "id": auth_response.user.id,
                     "email": auth_response.user.email,
                     "username": profile.data.get("username") if profile.data else None,
-                    "avatar_url": profile.data.get("avatar_url") if profile.data else None,
-                    "is_admin": profile.data.get("is_admin", False) if profile.data else False,
+                    "avatar_url": profile.data.get("avatar_url")
+                    if profile.data
+                    else None,
+                    "is_admin": profile.data.get("is_admin", False)
+                    if profile.data
+                    else False,
                 },
                 "session": {
                     "access_token": auth_response.session.access_token,
@@ -177,7 +213,13 @@ def get_profile(request):
         user = get_current_user(request)
 
         # 获取完整的 profile 信息
-        profile = supabase_admin.table("profiles").select("*").eq("id", user.id).single().execute()
+        profile = (
+            supabase_admin.table("profiles")
+            .select("*")
+            .eq("id", user.id)
+            .single()
+            .execute()
+        )
 
         # 获取信誉信息
         reputation = (
@@ -251,9 +293,16 @@ def update_profile(request):
                 return JsonResponse({"error": "Username already exists"}, status=400)
 
         # 更新 profile
-        result = supabase_admin.table("profiles").update(update_data).eq("id", user.id).execute()
+        result = (
+            supabase_admin.table("profiles")
+            .update(update_data)
+            .eq("id", user.id)
+            .execute()
+        )
 
-        return JsonResponse({"message": "Profile updated successfully", "profile": result.data[0]})
+        return JsonResponse(
+            {"message": "Profile updated successfully", "profile": result.data[0]}
+        )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -286,20 +335,26 @@ def upload_avatar(request):
 
         # 检查文件大小 (5MB)
         if avatar_file.size > 5 * 1024 * 1024:
-            return JsonResponse({"error": "File too large. Maximum size is 5MB"}, status=400)
+            return JsonResponse(
+                {"error": "File too large. Maximum size is 5MB"}, status=400
+            )
 
         # 上传到 Supabase Storage
         from services.supabase_storage import storage_service
 
         file_extension = avatar_file.name.split(".")[-1]
-        avatar_url = storage_service.upload_avatar(user.id, avatar_file.read(), file_extension)
+        avatar_url = storage_service.upload_avatar(
+            user.id, avatar_file.read(), file_extension
+        )
 
         # 更新 profile
         supabase_admin.table("profiles").update({"avatar_url": avatar_url}).eq(
             "id", user.id
         ).execute()
 
-        return JsonResponse({"message": "Avatar uploaded successfully", "avatar_url": avatar_url})
+        return JsonResponse(
+            {"message": "Avatar uploaded successfully", "avatar_url": avatar_url}
+        )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -334,10 +389,14 @@ def delete_avatar(request):
                 profile.data["avatar_url"], storage_service.BUCKETS["avatars"]
             )
             if file_path:
-                storage_service.delete_file(storage_service.BUCKETS["avatars"], file_path)
+                storage_service.delete_file(
+                    storage_service.BUCKETS["avatars"], file_path
+                )
 
         # 更新 profile，清空头像 URL
-        supabase_admin.table("profiles").update({"avatar_url": None}).eq("id", user.id).execute()
+        supabase_admin.table("profiles").update({"avatar_url": None}).eq(
+            "id", user.id
+        ).execute()
 
         return JsonResponse({"message": "Avatar deleted successfully"})
 
@@ -366,15 +425,21 @@ def change_password(request):
         new_password = data.get("new_password")
 
         if not old_password or not new_password:
-            return JsonResponse({"error": "Old password and new password are required"}, status=400)
+            return JsonResponse(
+                {"error": "Old password and new password are required"}, status=400
+            )
 
         # 验证新密码强度
         if len(new_password) < 6:
-            return JsonResponse({"error": "New password must be at least 6 characters"}, status=400)
+            return JsonResponse(
+                {"error": "New password must be at least 6 characters"}, status=400
+            )
 
         # 验证旧密码（通过重新登录）
         try:
-            supabase.auth.sign_in_with_password({"email": user.email, "password": old_password})
+            supabase.auth.sign_in_with_password(
+                {"email": user.email, "password": old_password}
+            )
         except Exception:
             return JsonResponse({"error": "Old password is incorrect"}, status=400)
 
