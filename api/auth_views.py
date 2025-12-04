@@ -63,34 +63,8 @@ def register(request):
         if not auth_response.user:
             return JsonResponse({"error": "Registration failed"}, status=400)
 
-        # 创建 profile
-        profile_data = {
-            "id": auth_response.user.id,
-            "username": username,
-            "bio": "",
-            "is_admin": False,
-        }
-
-        try:
-            supabase_admin.table("profiles").insert(profile_data).execute()
-        except Exception as profile_error:
-            print(f"Profile creation error: {profile_error}")
-            # Profile 创建失败不影响注册
-
-        # 创建信誉记录
-        reputation_data = {
-            "user_id": auth_response.user.id,
-            "score": 0,
-            "level": "novice",
-        }
-
-        try:
-            supabase_admin.table("reputation_summaries").insert(
-                reputation_data
-            ).execute()
-        except Exception as rep_error:
-            print(f"Reputation creation error: {rep_error}")
-            # 信誉记录创建失败不影响注册
+        # Profile 和 Reputation 由数据库触发器自动创建
+        # 无需在这里手动插入
 
         return JsonResponse(
             {
