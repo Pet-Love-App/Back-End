@@ -17,38 +17,51 @@ class SupabaseAuthMiddleware(MiddlewareMixin):
 
     def process_request(self, request):
         """处理请求，验证 token"""
+        import re
 
-        # 跳过不需要认证的路径（公开接口）
-        exempt_paths = [
-            # 认证相关（公开）
+        # 完全公开的路径（任何方法都不需要认证）
+        public_paths = [
+            # 认证相关
             "/api/auth/register/",
             "/api/auth/login/",
             "/api/auth/refresh/",
             "/api/auth/password/reset/",
             "/admin/",
-            # 猫粮相关（公开查询）
-            "/api/catfoods/",  # GET 列表和详情
-            "/api/catfood/by-barcode/",  # 条形码查询
-            # 添加剂/成分相关（公开查询）
+            # 添加剂/成分相关
             "/api/additive/search-additive/",
             "/api/additive/search-ingredient/",
             "/api/search/ingredient/info",
-            # 论坛相关（公开查询）
-            "/api/posts/",  # GET 列表
-            # 评论相关（公开查询）
-            "/api/comments/",  # GET 列表
-            # 信誉系统（公开查询）
-            "/api/reputation/users/",  # 查看其他用户信誉
-            "/api/reputation/badges/",  # 徽章列表
-            # AI 相关（公开）
-            "/api/ai/llm/chat",  # LLM 聊天
+            # 条形码查询
+            "/api/catfood/by-barcode/",
+            # AI LLM 聊天
+            "/api/ai/llm/chat",
             # 通知创建（系统调用）
             "/api/notifications/create/",
         ]
 
-        # 检查是否是豁免路径
-        if any(request.path.startswith(path) for path in exempt_paths):
-            return None
+        # 仅 GET 方法公开的路径（使用正则表达式）
+        public_get_patterns = [
+            r"^/api/catfoods/$",  # 猫粮列表
+            r"^/api/catfoods/\d+/$",  # 猫粮详情
+            r"^/api/catfoods/\d+/ratings/$",  # 猫粮评分列表
+            r"^/api/catfood/likes/count/\d+/$",  # 猫粮点赞数
+            r"^/api/catfood/\d+/comments/$",  # 猫粮评论列表
+            r"^/api/posts/$",  # 论坛列表
+            r"^/api/comments/$",  # 评论列表
+            r"^/api/reputation/users/[\w-]+/$",  # 查看用户信誉
+            r"^/api/reputation/badges/$",  # 徽章列表
+        ]
+
+        # 检查完全公开的路径
+        for path in public_paths:
+            if request.path.startswith(path):
+                return None
+
+        # 检查仅 GET 公开的路径
+        if request.method == "GET":
+            for pattern in public_get_patterns:
+                if re.match(pattern, request.path):
+                    return None
 
         # 获取 Authorization header
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")

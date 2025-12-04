@@ -12,6 +12,7 @@ from django.views.decorators.http import require_http_methods
 from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
 from services.supabase_storage import storage_service
+from utils import safe_single
 
 # ==================== 猫粮 CRUD ====================
 
@@ -113,16 +114,13 @@ def get_catfood_detail(request, catfood_id):
     """
     try:
         # 查询猫粮基本信息
-        catfood = (
-            supabase_admin.table("catfoods")
-            .select("*")
-            .eq("id", catfood_id)
-            .single()
-            .execute()
+        catfood_result = (
+            supabase_admin.table("catfoods").select("*").eq("id", catfood_id).execute()
         )
 
-        if not catfood.data:
-            return JsonResponse({"error": "Catfood not found"}, status=404)
+        catfood_data, error = safe_single(catfood_result, "Catfood not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 查询关联的成分
         ingredients = (
@@ -164,7 +162,7 @@ def get_catfood_detail(request, catfood_id):
 
         # 组合数据
         catfood_detail = {
-            **catfood.data,
+            **catfood_data,
             "ingredients": ingredients.data,
             "additives": additives.data,
             "tags": tags.data,
