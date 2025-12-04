@@ -385,14 +385,24 @@ def llm_chat(request):
 @require_auth
 def save_report(request):
     """
-    保存或更新 AI 分析报告
+    保存或更新 AI 分析报告（参考旧项目逻辑）
 
     POST /api/ai/save/
     Body: {
         "catfood_id": 123,
-        "content": "报告内容",
-        "analysis_data": {...}
+        "ingredients_text": "报告内容",
+        "tags": [...],
+        "additives": [...],
+        "ingredients": [...],
+        "safety": "...",
+        "nutrient": "...",
+        "percentage": true/false,
+        "percent_data": {...}
     }
+
+    权限说明（参考旧项目）:
+    - 普通用户: 仅能为没有营养成分信息的猫粮保存报告
+    - 管理员用户: 可以覆盖更新已有营养成分信息的猫粮报告
     """
     try:
         user = get_current_user(request)
@@ -402,27 +412,70 @@ def save_report(request):
             return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         catfood_id = data.get("catfood_id")
-        content = data.get("content")
+        ingredients_text = data.get("ingredients_text") or data.get("content")
 
-        if not catfood_id or not content:
+        if not catfood_id or not ingredients_text:
             return JsonResponse(
-                {"error": "catfood_id and content are required"}, status=400
+                {"error": "catfood_id and ingredients_text are required"}, status=400
             )
 
-        # 检查是否已存在报告（每个猫粮只有一条报告）
-        existing = (
+        # 检查猫粮是否存在
+        catfood_result = (
+            supabase_admin.table("catfoods").select("*").eq("id", catfood_id).execute()
+        )
+        catfood_data, error = safe_single(catfood_result, "Catfood not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
+
+        # 检查是否已存在报告
+        existing_report = (
             supabase_admin.table("ai_analysis_reports")
             .select("id")
             .eq("catfood_id", catfood_id)
             .execute()
         )
 
-        # 构建报告数据（不包含 user_id，因为报告是公共的）
+        # 检查猫粮是否已有营养成分数据
+        has_nutrition_data = (
+            catfood_data.get("percentage")
+            or catfood_data.get("crude_protein") is not None
+            or catfood_data.get("safety")
+            or catfood_data.get("nutrient")
+        )
+
+        # 权限检查：只有管理员可以更新已有营养成分信息的猫粮
+        is_admin = False
+        if user:
+            try:
+                profile_result = (
+                    supabase_admin.table("user_profiles")
+                    .select("is_admin")
+                    .eq("user_id", user.id)
+                    .execute()
+                )
+                if profile_result.data:
+                    is_admin = profile_result.data[0].get("is_admin", False)
+            except Exception:
+                pass
+
+        if has_nutrition_data and not is_admin:
+            return JsonResponse(
+                {
+                    "error": "该猫粮已有营养成分信息，只有管理员可以更新",
+                    "message": "普通用户无权覆盖已有的营养成分数据。如需更新，请联系管理员。",
+                    "existing_report_id": existing_report.data[0]["id"]
+                    if existing_report.data
+                    else None,
+                },
+                status=403,
+            )
+
+        # 构建报告数据
         report_data = {
             "catfood_id": catfood_id,
-            "ingredients_text": content,
-            "safety": data.get("safety"),
-            "nutrient": data.get("nutrient"),
+            "ingredients_text": ingredients_text,
+            "safety": data.get("safety", ""),
+            "nutrient": data.get("nutrient", ""),
             "percentage": data.get("percentage", False),
             "percent_data": data.get("percent_data", {}),
             "tags": data.get("tags", []),
@@ -430,27 +483,62 @@ def save_report(request):
             "ingredients": data.get("ingredients", []),
         }
 
-        if existing.data:
-            # 更新现有报告
+        # 保存/更新报告到 ai_analysis_reports 表
+        if existing_report.data:
             result = (
                 supabase_admin.table("ai_analysis_reports")
                 .update(report_data)
-                .eq("id", existing.data[0]["id"])
+                .eq("id", existing_report.data[0]["id"])
                 .execute()
             )
-            message = "Report updated successfully"
+            message = "报告更新成功"
         else:
-            # 创建新报告
             result = (
                 supabase_admin.table("ai_analysis_reports")
                 .insert(report_data)
                 .execute()
             )
-            message = "Report saved successfully"
+            message = "报告保存成功"
 
-        return JsonResponse({"message": message, "report": result.data[0]}, status=201)
+        # 同步营养成分数据到 catfoods 表（参考旧项目逻辑）
+        catfood_update_data = {
+            "safety": data.get("safety", ""),
+            "nutrient": data.get("nutrient", ""),
+            "percentage": data.get("percentage", False),
+        }
+
+        # 处理 percent_data：将其解包到各个营养成分字段
+        percent_data = data.get("percent_data", {})
+        if percent_data and isinstance(percent_data, dict):
+            for key in [
+                "crude_protein",
+                "crude_fat",
+                "carbohydrates",
+                "crude_fiber",
+                "crude_ash",
+                "others",
+            ]:
+                if key in percent_data:
+                    catfood_update_data[key] = percent_data[key]
+
+        # 更新 catfoods 表
+        supabase_admin.table("catfoods").update(catfood_update_data).eq(
+            "id", catfood_id
+        ).execute()
+
+        return JsonResponse(
+            {
+                "message": message,
+                "report": result.data[0] if result.data else None,
+            },
+            status=201,
+        )
 
     except Exception as e:
+        print(f"❌ [save_report] Error: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
         return JsonResponse({"error": str(e)}, status=500)
 
 

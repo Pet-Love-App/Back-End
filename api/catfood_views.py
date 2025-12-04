@@ -89,6 +89,28 @@ def list_catfoods(request):
             count_result.count if hasattr(count_result, "count") else len(result.data)
         )
 
+        # 批量查询点赞数量（为每个猫粮添加 like_count）
+        if result.data:
+            catfood_ids = [cf["id"] for cf in result.data]
+
+            # 查询所有相关的点赞记录
+            likes_result = (
+                supabase_admin.table("catfood_likes")
+                .select("catfood_id")
+                .in_("catfood_id", catfood_ids)
+                .execute()
+            )
+
+            # 统计每个猫粮的点赞数
+            like_counts = {}
+            for like in likes_result.data:
+                catfood_id = like["catfood_id"]
+                like_counts[catfood_id] = like_counts.get(catfood_id, 0) + 1
+
+            # 将点赞数添加到每个猫粮数据中
+            for catfood in result.data:
+                catfood["like_count"] = like_counts.get(catfood["id"], 0)
+
         return JsonResponse(
             {
                 "catfoods": result.data,
@@ -158,6 +180,15 @@ def get_catfood_detail(request, catfood_id):
             rating_count = len(ratings.data)
             avg_rating = sum(r["score"] for r in ratings.data) / rating_count
 
+        # 查询点赞数量
+        likes = (
+            supabase_admin.table("catfood_likes")
+            .select("id", count="exact")
+            .eq("catfood_id", catfood_id)
+            .execute()
+        )
+        like_count = likes.count if hasattr(likes, "count") else 0
+
         # 组合数据
         catfood_detail = {
             **catfood_data,
@@ -166,6 +197,7 @@ def get_catfood_detail(request, catfood_id):
             "tags": tags.data,
             "avg_rating": avg_rating,
             "rating_count": rating_count,
+            "like_count": like_count,  # ✅ 添加点赞数量
         }
 
         return JsonResponse({"catfood": catfood_detail})
@@ -300,6 +332,7 @@ def update_catfood(request, catfood_id):
         except ValueError:
             return JsonResponse({"error": "Invalid JSON body"}, status=400)
 
+        # 允许更新的字段（基本信息和营养分析）
         allowed_fields = {
             "name",
             "brand",
@@ -307,8 +340,37 @@ def update_catfood(request, catfood_id):
             "price",
             "weight",
             "image_url",
+            "barcode",
+            # 营养分析字段
+            "percentage",
+            "safety",
+            "nutrient",
+            # 营养成分百分比字段（从 percent_data 解包）
+            "crude_protein",
+            "crude_fat",
+            "carbohydrates",
+            "crude_fiber",
+            "crude_ash",
+            "others",
+            "moisture",
         }
-        update_data = {k: v for k, v in payload.items() if k in allowed_fields}
+
+        # 处理 percent_data（参考旧项目逻辑）
+        # 如果提供了 percentData 或 percent_data，将其解包到各个营养成分字段
+        percent_data = payload.pop("percentData", None) or payload.pop(
+            "percent_data", None
+        )
+        if percent_data and isinstance(percent_data, dict):
+            # 将 percent_data 的各个字段添加到 payload 中
+            for key, value in percent_data.items():
+                # 确保字段名在允许的字段中
+                if key in allowed_fields:
+                    payload[key] = value
+
+        # 筛选出允许更新的字段
+        update_data = {
+            k: v for k, v in payload.items() if k in allowed_fields and v is not None
+        }
 
         if update_data:
             supabase_admin.table("catfoods").update(update_data).eq(
