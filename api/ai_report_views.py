@@ -1,10 +1,11 @@
 """
 AI 报告相关 API
-使用 Supabase 进行数据操作，集成 OpenAI API
+使用 Supabase 进行数据操作，集成 LLM API
 """
 
 import json
 import os
+import re
 
 import requests
 from django.http import JsonResponse
@@ -15,22 +16,70 @@ from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
 from utils import parse_json_body, safe_single
 
-# OpenAI API 配置
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
-OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-3.5-turbo")
+# LLM API 配置（兼容 OpenAI 格式的 API）
+LLM_API_KEY = (
+    os.getenv("LLM_API_KEY")
+    or os.getenv("OPENAI_API_KEY")
+    or "sk-b4C9_BWHAkjKhYVwq0VD1g"
+)
+LLM_API_URL = (
+    os.getenv("LLM_API_URL")
+    or os.getenv("OPENAI_API_BASE")
+    or "https://llmapi.paratera.com/v1/chat/completions"
+)
+LLM_MODEL = os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "DeepSeek-V3.2-Exp"
 
 
-def _post_json(url, headers, data):
+def _post_json(url, headers, data, timeout=120):
     """
-    发送 POST 请求到 OpenAI API
+    发送 POST 请求到 LLM API（兼容 OpenAI 格式）
     返回: (status_code, response_text)
     """
     try:
-        response = requests.post(url, headers=headers, json=data, timeout=30)
+        response = requests.post(url, headers=headers, json=data, timeout=timeout)
         return (response.status_code, response.text)
     except requests.exceptions.RequestException as e:
         return (0, str(e))
+
+
+def _to_str_list(v):
+    """
+    将各种格式的数据转换为字符串列表
+
+    规则:
+    - None -> []
+    - list -> 转换为字符串并去除空白
+    - str -> 尝试 JSON 解析，或按分隔符分割
+    - 其他类型 -> 单元素列表
+    """
+    if v is None:
+        return []
+    if isinstance(v, list):
+        out = []
+        for x in v:
+            if x is None:
+                continue
+            s = str(x).strip()
+            if s:
+                out.append(s)
+        return out
+    if isinstance(v, str):
+        # 尝试 JSON 列表解析
+        try:
+            loaded = json.loads(v)
+            if isinstance(loaded, list):
+                return [
+                    str(x).strip() for x in loaded if x is not None and str(x).strip()
+                ]
+        except Exception:
+            pass
+        # 按常见分隔符分割
+        parts = [p.strip() for p in re.split(r"[;,，、\n]", v) if p.strip()]
+        if parts:
+            return parts
+        return [v.strip()]
+    # fallback
+    return [str(v).strip()]
 
 
 @csrf_exempt
@@ -39,7 +88,7 @@ def llm_chat(request):
     """
     LLM 聊天接口 - 分析猫粮成分
 
-    POST /api/ai/llm/chat
+    POST /api/ai/llm/chat/
     Body: {
         "ingredients": "鸡肉粉, 鱼肉粉, 维生素D"
     }
@@ -58,7 +107,8 @@ def llm_chat(request):
             "crude_fiber": 5.0,
             "crude_ash": 5.0,
             "others": 10.0
-        }
+        },
+        "tags": ["标签1", "标签2"]
     }
     """
     try:
@@ -66,65 +116,59 @@ def llm_chat(request):
             data = parse_json_body(request)
         except ValueError:
             return JsonResponse({"error": "Invalid JSON"}, status=400)
-        ingredients = data.get("ingredients")
 
+        ingredients = (data.get("ingredients") or "").strip()
         if not ingredients:
             return JsonResponse({"error": "ingredients field is required"}, status=400)
 
         # 检查 API Key
-        if not OPENAI_API_KEY:
+        if not LLM_API_KEY:
             return JsonResponse(
                 {
                     "ok": False,
                     "error": {
-                        "message": "OPENAI_API_KEY not configured",
+                        "message": "LLM_API_KEY not configured",
                         "type": "configuration_error",
                     },
                 },
                 status=502,
             )
 
-        # 构建 prompt
-        prompt = f"""请分析以下猫粮成分表，并以 JSON 格式返回分析结果：
+        # 构建更强大的系统提示词
+        system_instruction = (
+            "你是宠物食品配方与营养专家。\n"
+            "根据用户提供的猫粮配料表，只输出一个 JSON 对象。字段名必须用英文，字段内容用中文。\n"
+            "严格要求：\n"
+            "- 只能输出 JSON 对象本身，禁止出现任何额外文字（包括'首先'、'现在'、'需要'、'说明'、'分析'等词句）、禁止重复题目或解释步骤。\n"
+            "- 字段说明（英文字段名，内容中文）：\n"
+            "  - tags（array，分析产品特征（幼猫粮，成猫粮，全价猫粮，无谷，高蛋白，泌尿健康，养毛护肤，呵护肠胃，增肥发腮，高含肉量），元素为字符串）。\n"
+            "  - additives（array，可选，识别到的添加剂名称列表，元素为字符串）。\n"
+            "  - identified_nutrients（array，可选，识别到的营养成分或营养标签的名称列表，元素为字符串）。\n"
+            "  - safety（string，必填，大约50个汉字的针对猫粮的简要安全性分析，重点关注添加剂）；\n"
+            "  - nutrient（string，必填，大约300个汉字的针对猫粮的简要营养分析）；\n"
+            "  - percentage（boolean/null，可选，如果你能分析出以下各成分占比，请在此处填True，否则填False。尽可能分析！）；\n"
+            '  - percent_data（dict,以营养成分英文名作为字段名，例如"carbohydrates"，值为number,各相应成分百分比。如果能分析占比，percentage=True。如果percentage=True，一定要有一个字段是others，代表其他成分的百分比。所有含量之和应为100）\n'
+            "- 数值字段无法判断时返回 null；数组字段无法判断或无识别结果时返回空数组。\n"
+            "- 禁止输出推理过程或步骤说明，只保留结论性短句或最终的 JSON 字段内容。\n"
+        )
 
-成分：{ingredients}
-
-请返回以下格式的 JSON（不要包含任何其他文本）：
-{{
-    "tags": ["标签1", "标签2"],
-    "additives": ["添加剂1", "添加剂2"],
-    "identified_nutrients": ["营养素1", "营养素2"],
-    "safety": "安全评估（安全/需注意/不安全）",
-    "nutrient": "详细的营养分析说明",
-    "percentage": true,
-    "crude_protein": 30.0,
-    "crude_fat": 10.0,
-    "carbohydrates": 40.0,
-    "crude_fiber": 5.0,
-    "crude_ash": 5.0
-}}
-
-注意：
-1. percentage 为 true 时，各成分百分比总和应为 100
-2. 如果无法确定某个值，设置为 null
-3. safety 只能是：安全、需注意、不安全 之一
-"""
-
-        # 调用 OpenAI API
-        url = f"{OPENAI_API_BASE}/chat/completions"
+        # 调用 LLM API（兼容 OpenAI 格式）
         headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Authorization": f"Bearer {LLM_API_KEY}",
             "Content-Type": "application/json",
         }
 
         request_data = {
-            "model": OPENAI_MODEL,
-            "messages": [{"role": "user", "content": prompt}],
-            "temperature": 0.7,
-            "max_tokens": 1000,
+            "model": LLM_MODEL,
+            "messages": [
+                {"role": "system", "content": system_instruction},
+                {"role": "user", "content": ingredients},
+            ],
+            "temperature": 0.0,  # 降低温度以获得更一致的输出
+            "max_tokens": 2048,  # 增加 token 限制
         }
 
-        status_code, response_text = _post_json(url, headers, request_data)
+        status_code, response_text = _post_json(LLM_API_URL, headers, request_data)
 
         # 处理网络错误
         if status_code == 0:
@@ -136,66 +180,26 @@ def llm_chat(request):
                 status=502,
             )
 
-        # 处理 API 错误
-        if status_code != 200:
-            return JsonResponse(
-                {
-                    "ok": False,
-                    "error": {
-                        "message": f"OpenAI API error: {response_text}",
-                        "type": "api_error",
-                    },
-                },
-                status=502,
-            )
-
-        # 解析响应
+        # 尝试解析 JSON 响应
         try:
             response_json = json.loads(response_text)
-            content = response_json["choices"][0]["message"]["content"]
+        except json.JSONDecodeError:
+            # 尝试提取 JSON 子串
+            start = response_text.find("{")
+            end = response_text.rfind("}")
+            if start != -1 and end != -1 and end > start:
+                try:
+                    response_json = json.loads(response_text[start : end + 1])
+                except Exception:
+                    response_json = None
+            else:
+                response_json = None
 
-            # 尝试解析 AI 返回的 JSON
-            try:
-                ai_result = json.loads(content)
-            except json.JSONDecodeError:
-                # 如果 AI 返回的不是有效 JSON，返回默认结构
-                ai_result = {}
-
-            # 构建标准响应格式
-            result = {
-                "additive": ai_result.get("additives", []),
-                "ingredient": ai_result.get("identified_nutrients", []),
-                "nutrient": ai_result.get("nutrient", ""),
-                "safety": ai_result.get("safety", ""),
-                "percentage": ai_result.get("percentage", False),
-                "percent_data": {
-                    "crude_protein": ai_result.get("crude_protein"),
-                    "crude_fat": ai_result.get("crude_fat"),
-                    "carbohydrates": ai_result.get("carbohydrates"),
-                    "crude_fiber": ai_result.get("crude_fiber"),
-                    "crude_ash": ai_result.get("crude_ash"),
-                    "others": None,
-                },
-            }
-
-            # 如果有百分比数据，计算 others
-            if result["percentage"]:
-                total = sum(
-                    v or 0
-                    for v in [
-                        result["percent_data"]["crude_protein"],
-                        result["percent_data"]["crude_fat"],
-                        result["percent_data"]["carbohydrates"],
-                        result["percent_data"]["crude_fiber"],
-                        result["percent_data"]["crude_ash"],
-                    ]
-                )
-                result["percent_data"]["others"] = max(0, 100 - total)
-
-            return JsonResponse(result)
-
-        except (KeyError, json.JSONDecodeError):
-            # 解析失败，返回默认结构
+        # 处理 API 错误
+        if status_code >= 400 or response_json is None:
+            print(
+                f"❌ [LLM] API error: status={status_code}, response={response_text[:200]}"
+            )
             return JsonResponse(
                 {
                     "additive": [],
@@ -203,18 +207,176 @@ def llm_chat(request):
                     "nutrient": "",
                     "safety": "",
                     "percentage": False,
-                    "percent_data": {
-                        "crude_protein": None,
-                        "crude_fat": None,
-                        "carbohydrates": None,
-                        "crude_fiber": None,
-                        "crude_ash": None,
-                        "others": None,
-                    },
-                }
+                    "percent_data": {},
+                    "tags": [],
+                },
+                status=200,  # 返回 200 但数据为空
             )
 
+        # 从响应中提取 AI 生成的文本
+        extracted_text = None
+        if isinstance(response_json, dict):
+            choices = response_json.get("choices")
+            if isinstance(choices, list) and choices:
+                first = choices[0]
+                msg = (first or {}).get("message") or {}
+                extracted_text = (
+                    msg.get("content")
+                    or msg.get("reasoning_content")
+                    or (first or {}).get("text")
+                )
+            if extracted_text is None and "output" in response_json:
+                out = response_json.get("output")
+                extracted_text = (
+                    out if isinstance(out, str) else json.dumps(out, ensure_ascii=False)
+                )
+
+        # 解析 AI 返回的 JSON
+        parsed = None
+        if isinstance(extracted_text, str):
+            try:
+                parsed = json.loads(extracted_text)
+            except Exception:
+                # 尝试提取 JSON 子串
+                s = extracted_text.find("{")
+                e = extracted_text.rfind("}")
+                if s != -1 and e != -1 and e > s:
+                    try:
+                        parsed = json.loads(extracted_text[s : e + 1])
+                    except Exception:
+                        parsed = None
+
+        print("=" * 80)
+        print("🔍 [LLM] 解析结构化响应...")
+        print(f"🔍 [LLM] Type of parsed: {type(parsed)}")
+        print(f"🔍 [LLM] Is dict: {isinstance(parsed, dict)}")
+        if isinstance(parsed, dict):
+            print(f"🔍 [LLM] Keys in parsed dict: {list(parsed.keys())}")
+            print("🔍 [LLM] Full parsed content:")
+            print(json.dumps(parsed, indent=2, ensure_ascii=False))
+        print("=" * 80)
+
+        # 初始化默认结构
+        result = {
+            "tags": [],
+            "additive": [],
+            "ingredient": [],
+            "nutrient": "",
+            "safety": "",
+            "percentage": False,
+            "percent_data": {},
+        }
+
+        if isinstance(parsed, dict):
+            # 提取标签（带白名单验证）
+            raw_tags = parsed.get("tags") or parsed.get("product_tags")
+            tags_whitelist = [
+                "幼猫粮",
+                "成猫粮",
+                "全价猫粮",
+                "无谷",
+                "高蛋白",
+                "泌尿健康",
+                "养毛护肤",
+                "呵护肠胃",
+                "增肥发腮",
+                "高含肉量",
+            ]
+            result["tags"] = [
+                tag for tag in _to_str_list(raw_tags) if tag in tags_whitelist
+            ]
+
+            # 提取添加剂
+            raw_add = (
+                parsed.get("additives")
+                or parsed.get("identified_additives")
+                or parsed.get("additive_list")
+                or parsed.get("additives_list")
+            )
+            result["additive"] = _to_str_list(raw_add)
+
+            # 提取营养成分
+            raw_id_nut = (
+                parsed.get("identified_nutrients")
+                or parsed.get("nutrients")
+                or parsed.get("identified_nutrition")
+                or parsed.get("nutrition_components")
+            )
+            result["ingredient"] = _to_str_list(raw_id_nut)
+
+            # 提取文本分析
+            result["safety"] = str(
+                parsed.get("safety") or parsed.get("safety_analysis") or ""
+            )
+            result["nutrient"] = str(
+                parsed.get("nutrient") or parsed.get("nutrition") or ""
+            )
+
+            # 提取百分比标志
+            pct = (
+                parsed.get("percentage")
+                if parsed.get("percentage") is not None
+                else parsed.get("has_percentage")
+            )
+            if isinstance(pct, bool):
+                result["percentage"] = pct
+            elif isinstance(pct, (int, float, str)):
+                try:
+                    iv = int(pct)
+                    result["percentage"] = bool(iv)
+                except Exception:
+                    result["percentage"] = False
+
+            # 提取百分比数据
+            raw_percent_data = (
+                parsed.get("percent_data") or parsed.get("percentage_data") or {}
+            )
+            print(f"🔍 [LLM Response] Raw percent_data from LLM: {raw_percent_data}")
+            print(f"🔍 [LLM Response] Type: {type(raw_percent_data)}")
+
+            if isinstance(raw_percent_data, dict):
+                result["percent_data"] = raw_percent_data
+            else:
+                print(
+                    "⚠️ [LLM Response] percent_data is not dict, converting to empty dict"
+                )
+                result["percent_data"] = {}
+
+            print(
+                f"🔍 [LLM Response] After validation, percent_data: {result['percent_data']}"
+            )
+            print(f"🔍 [LLM Response] Keys count: {len(result['percent_data'])}")
+
+            # 确保百分比总和为 100
+            if result["percentage"] and result["percent_data"]:
+                total = sum(
+                    v
+                    for v in result["percent_data"].values()
+                    if isinstance(v, (int, float))
+                )
+                print(f"🔍 [LLM Response] Total percentage: {total}")
+                if 0 < total < 100:
+                    result["percent_data"]["others"] = round(100 - total, 2)
+                    print(f"✅ [LLM Response] Added 'others': {100 - total}")
+
+            # 如果没有有效的百分比数据，设置 percentage 为 False
+            if not result["percent_data"] or len(result["percent_data"]) <= 1:
+                print(
+                    "⚠️ [LLM Response] No valid percent_data, setting percentage to False"
+                )
+                result["percentage"] = False
+            else:
+                print(
+                    f"✅ [LLM Response] Valid percent_data found with {len(result['percent_data'])} fields"
+                )
+
+        return JsonResponse(result, status=200)
+
     except Exception as e:
+        print(f"❌ [LLM] Exception: {str(e)}")
+        import traceback
+
+        traceback.print_exc()
         return JsonResponse({"error": str(e)}, status=500)
 
 
