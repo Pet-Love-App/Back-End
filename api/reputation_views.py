@@ -3,14 +3,13 @@
 使用 Supabase 进行数据操作
 """
 
-import json
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
+from utils import get_single_or_none, parse_json_body, require_admin, safe_single
 
 
 @csrf_exempt
@@ -26,26 +25,29 @@ def get_my_reputation(request):
         user = get_current_user(request)
 
         # 查询信誉信息
-        reputation = (
+        reputation_result = (
             supabase_admin.table("reputation_summaries")
             .select("*")
             .eq("user_id", user.id)
-            .single()
             .execute()
         )
+        reputation_data = get_single_or_none(reputation_result)
 
-        if not reputation.data:
+        if not reputation_data:
             # 如果不存在，创建默认信誉记录
             default_reputation = {
                 "user_id": user.id,
                 "score": 0,
                 "level": "novice",
             }
-            reputation = (
-                supabase_admin.table("reputation_summaries").insert(default_reputation).execute()
+            insert_result = (
+                supabase_admin.table("reputation_summaries")
+                .insert(default_reputation)
+                .execute()
             )
+            reputation_data = insert_result.data[0]
 
-        return JsonResponse({"reputation": reputation.data})
+        return JsonResponse({"reputation": reputation_data})
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -61,18 +63,17 @@ def get_user_reputation(request, user_id):
     """
     try:
         # 查询信誉信息
-        reputation = (
+        reputation_result = (
             supabase_admin.table("reputation_summaries")
             .select("*, user:profiles(username, avatar_url)")
             .eq("user_id", user_id)
-            .single()
             .execute()
         )
+        reputation_data, error = safe_single(reputation_result, "Reputation not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
-        if not reputation.data:
-            return JsonResponse({"error": "Reputation not found"}, status=404)
-
-        return JsonResponse({"reputation": reputation.data})
+        return JsonResponse({"reputation": reputation_data})
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -116,7 +117,10 @@ def list_all_badges(request):
     try:
         # 查询所有徽章
         badges = (
-            supabase_admin.table("badges").select("*").order("required_score", desc=False).execute()
+            supabase_admin.table("badges")
+            .select("*")
+            .order("required_score", desc=False)
+            .execute()
         )
 
         return JsonResponse({"badges": badges.data})
@@ -138,17 +142,18 @@ def equip_badge(request, badge_code):
         user = get_current_user(request)
 
         # 检查用户是否拥有该徽章
-        user_badge = (
+        user_badge_result = (
             supabase_admin.table("user_badges")
             .select("id")
             .eq("user_id", user.id)
             .eq("badge_code", badge_code)
-            .single()
             .execute()
         )
-
-        if not user_badge.data:
-            return JsonResponse({"error": "You don't have this badge"}, status=404)
+        user_badge_data, error = safe_single(
+            user_badge_result, "You don't have this badge"
+        )
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 取消其他徽章的佩戴状态
         supabase_admin.table("user_badges").update({"is_equipped": False}).eq(
@@ -157,7 +162,7 @@ def equip_badge(request, badge_code):
 
         # 佩戴该徽章
         supabase_admin.table("user_badges").update({"is_equipped": True}).eq(
-            "id", user_badge.data["id"]
+            "id", user_badge_data["id"]
         ).execute()
 
         return JsonResponse({"message": "Badge equipped successfully"})
@@ -179,21 +184,22 @@ def unequip_badge(request, badge_code):
         user = get_current_user(request)
 
         # 查找该徽章
-        user_badge = (
+        user_badge_result = (
             supabase_admin.table("user_badges")
             .select("id")
             .eq("user_id", user.id)
             .eq("badge_code", badge_code)
-            .single()
             .execute()
         )
-
-        if not user_badge.data:
-            return JsonResponse({"error": "You don't have this badge"}, status=404)
+        user_badge_data, error = safe_single(
+            user_badge_result, "You don't have this badge"
+        )
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 取消佩戴
         supabase_admin.table("user_badges").update({"is_equipped": False}).eq(
-            "id", user_badge.data["id"]
+            "id", user_badge_data["id"]
         ).execute()
 
         return JsonResponse({"message": "Badge unequipped successfully"})
@@ -205,6 +211,7 @@ def unequip_badge(request, badge_code):
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_auth
+@require_admin
 def update_reputation(request):
     """
     更新用户信誉（管理员接口）
@@ -217,17 +224,10 @@ def update_reputation(request):
     }
     """
     try:
-        user = get_current_user(request)
-
-        # 检查管理员权限
-        profile = (
-            supabase_admin.table("profiles").select("is_admin").eq("id", user.id).single().execute()
-        )
-
-        if not profile.data or not profile.data.get("is_admin"):
-            return JsonResponse({"error": "Admin permission required"}, status=403)
-
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         target_user_id = data.get("user_id")
         score_change = data.get("score_change", 0)
 
@@ -235,19 +235,18 @@ def update_reputation(request):
             return JsonResponse({"error": "user_id is required"}, status=400)
 
         # 获取当前信誉
-        reputation = (
+        reputation_result = (
             supabase_admin.table("reputation_summaries")
             .select("*")
             .eq("user_id", target_user_id)
-            .single()
             .execute()
         )
-
-        if not reputation.data:
-            return JsonResponse({"error": "Reputation not found"}, status=404)
+        reputation_data, error = safe_single(reputation_result, "Reputation not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 更新分数
-        new_score = reputation.data["score"] + score_change
+        new_score = reputation_data["score"] + score_change
 
         # 根据分数计算等级
         if new_score < 100:
@@ -280,6 +279,7 @@ def update_reputation(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_auth
+@require_admin
 def award_badge(request):
     """
     授予徽章（管理员接口）
@@ -291,28 +291,25 @@ def award_badge(request):
     }
     """
     try:
-        user = get_current_user(request)
-
-        # 检查管理员权限
-        profile = (
-            supabase_admin.table("profiles").select("is_admin").eq("id", user.id).single().execute()
-        )
-
-        if not profile.data or not profile.data.get("is_admin"):
-            return JsonResponse({"error": "Admin permission required"}, status=403)
-
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         target_user_id = data.get("user_id")
         badge_code = data.get("badge_code")
 
         if not target_user_id or not badge_code:
-            return JsonResponse({"error": "user_id and badge_code are required"}, status=400)
+            return JsonResponse(
+                {"error": "user_id and badge_code are required"}, status=400
+            )
 
         # 检查徽章是否存在
-        badge = supabase_admin.table("badges").select("*").eq("code", badge_code).single().execute()
-
-        if not badge.data:
-            return JsonResponse({"error": "Badge not found"}, status=404)
+        badge_result = (
+            supabase_admin.table("badges").select("*").eq("code", badge_code).execute()
+        )
+        badge_data, error = safe_single(badge_result, "Badge not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 检查用户是否已拥有该徽章
         existing = (
@@ -336,7 +333,8 @@ def award_badge(request):
         result = supabase_admin.table("user_badges").insert(badge_data).execute()
 
         return JsonResponse(
-            {"message": "Badge awarded successfully", "user_badge": result.data[0]}, status=201
+            {"message": "Badge awarded successfully", "user_badge": result.data[0]},
+            status=201,
         )
 
     except Exception as e:

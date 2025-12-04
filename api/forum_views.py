@@ -10,6 +10,7 @@ from django.views.decorators.http import require_http_methods
 from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
 from services.supabase_storage import storage_service
+from utils import safe_single
 
 
 @csrf_exempt
@@ -126,17 +127,16 @@ def delete_post(request, post_id):
         user = get_current_user(request)
 
         # 验证帖子所有权
-        post = (
+        post_result = (
             supabase_admin.table("posts")
             .select("*")
             .eq("id", post_id)
             .eq("author_id", user.id)
-            .single()
             .execute()
         )
-
-        if not post.data:
-            return JsonResponse({"error": "Post not found"}, status=404)
+        post_data, error = safe_single(post_result, "Post not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 查询并删除关联的媒体文件
         media = (

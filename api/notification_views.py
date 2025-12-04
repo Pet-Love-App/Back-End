@@ -3,14 +3,13 @@
 使用 Supabase 进行数据操作
 """
 
-import json
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
+from utils import parse_json_body, safe_single
 
 
 @csrf_exempt
@@ -101,17 +100,16 @@ def mark_as_read(request, notification_id):
         user = get_current_user(request)
 
         # 验证通知所有权
-        notification = (
+        notification_result = (
             supabase_admin.table("notifications")
             .select("*")
             .eq("id", notification_id)
             .eq("user_id", user.id)
-            .single()
             .execute()
         )
-
-        if not notification.data:
-            return JsonResponse({"error": "Notification not found"}, status=404)
+        _, error = safe_single(notification_result, "Notification not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 标记为已读
         supabase_admin.table("notifications").update({"is_read": True}).eq(
@@ -160,17 +158,16 @@ def delete_notification(request, notification_id):
         user = get_current_user(request)
 
         # 验证通知所有权
-        notification = (
+        notification_result = (
             supabase_admin.table("notifications")
             .select("*")
             .eq("id", notification_id)
             .eq("user_id", user.id)
-            .single()
             .execute()
         )
-
-        if not notification.data:
-            return JsonResponse({"error": "Notification not found"}, status=404)
+        _, error = safe_single(notification_result, "Notification not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 删除通知
         supabase_admin.table("notifications").delete().eq(
@@ -223,7 +220,10 @@ def create_notification(request):
         # 注意：这个接口应该只允许系统内部调用，或者需要特殊权限
         # 这里简化处理，实际应该添加更严格的权限控制
 
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON body"}, status=400)
 
         user_id = data.get("user_id")
         notification_type = data.get("type")

@@ -13,6 +13,7 @@ from django.views.decorators.http import require_http_methods
 
 from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
+from utils import parse_json_body, safe_single
 
 # OpenAI API 配置
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -61,7 +62,10 @@ def llm_chat(request):
     }
     """
     try:
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         ingredients = data.get("ingredients")
 
         if not ingredients:
@@ -108,7 +112,10 @@ def llm_chat(request):
 
         # 调用 OpenAI API
         url = f"{OPENAI_API_BASE}/chat/completions"
-        headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        }
 
         request_data = {
             "model": OPENAI_MODEL,
@@ -227,13 +234,18 @@ def save_report(request):
     """
     try:
         user = get_current_user(request)
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         catfood_id = data.get("catfood_id")
         content = data.get("content")
 
         if not catfood_id or not content:
-            return JsonResponse({"error": "catfood_id and content are required"}, status=400)
+            return JsonResponse(
+                {"error": "catfood_id and content are required"}, status=400
+            )
 
         # 检查是否已存在报告
         existing = (
@@ -262,7 +274,11 @@ def save_report(request):
             message = "Report updated successfully"
         else:
             # 创建新报告
-            result = supabase_admin.table("ai_analysis_reports").insert(report_data).execute()
+            result = (
+                supabase_admin.table("ai_analysis_reports")
+                .insert(report_data)
+                .execute()
+            )
             message = "Report saved successfully"
 
         return JsonResponse({"message": message, "report": result.data[0]}, status=201)
@@ -284,19 +300,18 @@ def get_report(request, catfood_id):
         user = get_current_user(request)
 
         # 查询报告
-        report = (
+        report_result = (
             supabase_admin.table("ai_analysis_reports")
             .select("*, catfood:catfoods(*)")
             .eq("catfood_id", catfood_id)
             .eq("user_id", user.id)
-            .single()
             .execute()
         )
+        report_data, error = safe_single(report_result, "Report not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
-        if not report.data:
-            return JsonResponse({"error": "Report not found"}, status=404)
-
-        return JsonResponse({"report": report.data})
+        return JsonResponse({"report": report_data})
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -344,20 +359,21 @@ def delete_report(request, catfood_id):
         user = get_current_user(request)
 
         # 查找报告
-        report = (
+        report_result = (
             supabase_admin.table("ai_analysis_reports")
             .select("id")
             .eq("catfood_id", catfood_id)
             .eq("user_id", user.id)
-            .single()
             .execute()
         )
-
-        if not report.data:
-            return JsonResponse({"error": "Report not found"}, status=404)
+        report_data, error = safe_single(report_result, "Report not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 删除报告
-        supabase_admin.table("ai_analysis_reports").delete().eq("id", report.data["id"]).execute()
+        supabase_admin.table("ai_analysis_reports").delete().eq(
+            "id", report_data["id"]
+        ).execute()
 
         return JsonResponse({"message": "Report deleted successfully"})
 
@@ -406,7 +422,10 @@ def toggle_favorite_report(request):
     """
     try:
         user = get_current_user(request)
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         report_id = data.get("report_id")
         if not report_id:
@@ -426,7 +445,9 @@ def toggle_favorite_report(request):
             supabase_admin.table("favorite_reports").delete().eq(
                 "id", existing.data[0]["id"]
             ).execute()
-            return JsonResponse({"message": "Unfavorited successfully", "favorited": False})
+            return JsonResponse(
+                {"message": "Unfavorited successfully", "favorited": False}
+            )
         else:
             # 添加收藏
             favorite_data = {
@@ -434,7 +455,9 @@ def toggle_favorite_report(request):
                 "user_id": user.id,
             }
             supabase_admin.table("favorite_reports").insert(favorite_data).execute()
-            return JsonResponse({"message": "Favorited successfully", "favorited": True})
+            return JsonResponse(
+                {"message": "Favorited successfully", "favorited": True}
+            )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -453,20 +476,21 @@ def delete_favorite_report(request, favorite_id):
         user = get_current_user(request)
 
         # 验证收藏所有权
-        favorite = (
+        favorite_result = (
             supabase_admin.table("favorite_reports")
             .select("*")
             .eq("id", favorite_id)
             .eq("user_id", user.id)
-            .single()
             .execute()
         )
-
-        if not favorite.data:
-            return JsonResponse({"error": "Favorite not found"}, status=404)
+        favorite_data, error = safe_single(favorite_result, "Favorite not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 删除收藏
-        supabase_admin.table("favorite_reports").delete().eq("id", favorite_id).execute()
+        supabase_admin.table("favorite_reports").delete().eq(
+            "id", favorite_data["id"]
+        ).execute()
 
         return JsonResponse({"message": "Favorite deleted successfully"})
 

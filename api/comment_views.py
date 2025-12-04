@@ -3,14 +3,13 @@
 使用 Supabase 进行数据操作
 """
 
-import json
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
+from utils import parse_json_body, safe_single
 
 
 @csrf_exempt
@@ -29,7 +28,9 @@ def list_comments(request):
         target_id = request.GET.get("target_id")
 
         if not target_type or not target_id:
-            return JsonResponse({"error": "target_type and target_id are required"}, status=400)
+            return JsonResponse(
+                {"error": "target_type and target_id are required"}, status=400
+            )
 
         # 查询评论，关联作者信息
         result = (
@@ -76,7 +77,10 @@ def create_comment(request):
     """
     try:
         user = get_current_user(request)
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         # 验证必填字段
         required_fields = ["target_type", "target_id", "content"]
@@ -101,7 +105,8 @@ def create_comment(request):
         # 如果是评论帖子，通知帖子作者
 
         return JsonResponse(
-            {"message": "Comment created successfully", "comment": result.data[0]}, status=201
+            {"message": "Comment created successfully", "comment": result.data[0]},
+            status=201,
         )
 
     except Exception as e:
@@ -121,17 +126,16 @@ def delete_comment(request, comment_id):
         user = get_current_user(request)
 
         # 验证评论所有权
-        comment = (
+        comment_result = (
             supabase_admin.table("comments")
             .select("*")
             .eq("id", comment_id)
             .eq("author_id", user.id)
-            .single()
             .execute()
         )
-
-        if not comment.data:
-            return JsonResponse({"error": "Comment not found"}, status=404)
+        _, error = safe_single(comment_result, "Comment not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 删除评论（回复会通过级联删除）
         supabase_admin.table("comments").delete().eq("id", comment_id).execute()

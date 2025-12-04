@@ -3,14 +3,13 @@
 使用 Supabase 进行数据操作
 """
 
-import json
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from config.supabase_client import supabase_admin
-from middleware.supabase_auth import get_current_user, require_auth
+from middleware.supabase_auth import require_auth
+from utils import parse_json_body, require_admin
 
 
 @csrf_exempt
@@ -33,11 +32,11 @@ def search_additive(request):
         if not query:
             return JsonResponse({"error": "Search query is required"}, status=400)
 
-        # 搜索添加剂（按名称或别名）
+        # 搜索添加剂（按名称）
         result = (
             supabase_admin.table("additives")
             .select("*")
-            .or_(f"name.ilike.%{query}%,alias.ilike.%{query}%")
+            .ilike("name", f"%{query}%")
             .limit(limit)
             .execute()
         )
@@ -68,11 +67,11 @@ def search_ingredient(request):
         if not query:
             return JsonResponse({"error": "Search query is required"}, status=400)
 
-        # 搜索成分（按名称或别名）
+        # 搜索成分（按名称）
         result = (
             supabase_admin.table("ingredients")
             .select("*")
-            .or_(f"name.ilike.%{query}%,alias.ilike.%{query}%")
+            .ilike("name", f"%{query}%")
             .limit(limit)
             .execute()
         )
@@ -86,6 +85,7 @@ def search_ingredient(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_auth
+@require_admin
 def add_ingredient(request):
     """
     添加成分（需要管理员权限）
@@ -93,28 +93,16 @@ def add_ingredient(request):
     POST /api/additive/add-ingredient/
     Body: {
         "name": "成分名称",
-        "alias": "别名",
         "category": "分类",
         "description": "描述",
         "safety_level": "安全等级"
     }
     """
     try:
-        user = get_current_user(request)
-
-        # 检查管理员权限
-        profile = (
-            supabase_admin.table("profiles")
-            .select("is_admin")
-            .eq("id", user.id)
-            .single()
-            .execute()
-        )
-
-        if not profile.data or not profile.data.get("is_admin"):
-            return JsonResponse({"error": "Admin permission required"}, status=403)
-
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request, default={})
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON body"}, status=400)
         name = data.get("name")
 
         if not name:
@@ -128,10 +116,9 @@ def add_ingredient(request):
         if existing.data:
             return JsonResponse({"error": "Ingredient already exists"}, status=400)
 
-        # 准备数据
+        # 准备数据（ingredients 表没有 alias 字段）
         ingredient_data = {
             "name": name,
-            "alias": data.get("alias", ""),
             "category": data.get("category", ""),
             "description": data.get("description", ""),
             "safety_level": data.get("safety_level", "unknown"),
@@ -152,6 +139,7 @@ def add_ingredient(request):
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_auth
+@require_admin
 def add_additive(request):
     """
     添加添加剂（需要管理员权限）
@@ -159,28 +147,16 @@ def add_additive(request):
     POST /api/additive/add-additive/
     Body: {
         "name": "添加剂名称",
-        "alias": "别名",
         "category": "分类",
         "description": "描述",
         "safety_level": "安全等级"
     }
     """
     try:
-        user = get_current_user(request)
-
-        # 检查管理员权限
-        profile = (
-            supabase_admin.table("profiles")
-            .select("is_admin")
-            .eq("id", user.id)
-            .single()
-            .execute()
-        )
-
-        if not profile.data or not profile.data.get("is_admin"):
-            return JsonResponse({"error": "Admin permission required"}, status=403)
-
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request, default={})
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON body"}, status=400)
         name = data.get("name")
 
         if not name:
@@ -194,10 +170,9 @@ def add_additive(request):
         if existing.data:
             return JsonResponse({"error": "Additive already exists"}, status=400)
 
-        # 准备数据
+        # 准备数据（additives 表没有 alias 字段）
         additive_data = {
             "name": name,
-            "alias": data.get("alias", ""),
             "category": data.get("category", ""),
             "description": data.get("description", ""),
             "safety_level": data.get("safety_level", "unknown"),
@@ -268,8 +243,8 @@ def get_ingredient_info(request):
         # 支持 POST 和 GET 请求
         if request.method == "POST":
             try:
-                payload = json.loads(request.body.decode("utf-8") or "{}")
-            except json.JSONDecodeError:
+                payload = parse_json_body(request, default={})
+            except ValueError:
                 return JsonResponse(
                     {
                         "ok": False,

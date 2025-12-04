@@ -3,14 +3,13 @@
 处理登录、注册、密码重置等
 """
 
-import json
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
 from config.supabase_client import supabase, supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
+from utils import get_single_or_none, parse_json_body, safe_single
 
 
 @csrf_exempt
@@ -27,7 +26,10 @@ def register(request):
     }
     """
     try:
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         email = data.get("email")
         password = data.get("password")
         username = data.get("username")
@@ -82,7 +84,7 @@ def register(request):
             status=201,
         )
 
-    except json.JSONDecodeError:
+    except ValueError:
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         import traceback
@@ -105,7 +107,10 @@ def login(request):
     }
     """
     try:
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         email = data.get("email")
         password = data.get("password")
 
@@ -123,13 +128,13 @@ def login(request):
             return JsonResponse({"error": "Invalid credentials"}, status=401)
 
         # 获取用户 profile
-        profile = (
+        profile_result = (
             supabase_admin.table("profiles")
             .select("*")
             .eq("id", auth_response.user.id)
-            .single()
             .execute()
         )
+        profile_data = get_single_or_none(profile_result)
 
         return JsonResponse(
             {
@@ -137,12 +142,12 @@ def login(request):
                 "user": {
                     "id": auth_response.user.id,
                     "email": auth_response.user.email,
-                    "username": profile.data.get("username") if profile.data else None,
-                    "avatar_url": profile.data.get("avatar_url")
-                    if profile.data
+                    "username": profile_data.get("username") if profile_data else None,
+                    "avatar_url": profile_data.get("avatar_url")
+                    if profile_data
                     else None,
-                    "is_admin": profile.data.get("is_admin", False)
-                    if profile.data
+                    "is_admin": profile_data.get("is_admin", False)
+                    if profile_data
                     else False,
                 },
                 "session": {
@@ -187,22 +192,21 @@ def get_profile(request):
         user = get_current_user(request)
 
         # 获取完整的 profile 信息
-        profile = (
-            supabase_admin.table("profiles")
-            .select("*")
-            .eq("id", user.id)
-            .single()
-            .execute()
+        profile_result = (
+            supabase_admin.table("profiles").select("*").eq("id", user.id).execute()
         )
+        profile_data, error = safe_single(profile_result, "Profile not found")
+        if error:
+            return JsonResponse({"error": error}, status=404)
 
         # 获取信誉信息
-        reputation = (
+        reputation_result = (
             supabase_admin.table("reputation_summaries")
             .select("*")
             .eq("user_id", user.id)
-            .single()
             .execute()
         )
+        reputation_data = get_single_or_none(reputation_result)
 
         # 获取徽章
         badges = (
@@ -214,12 +218,8 @@ def get_profile(request):
 
         return JsonResponse(
             {
-                "user": {
-                    "id": user.id,
-                    "email": user.email,
-                    **profile.data,
-                },
-                "reputation": reputation.data if reputation.data else None,
+                "user": {"id": user.id, "email": user.email, **profile_data},
+                "reputation": reputation_data,
                 "badges": badges.data if badges.data else [],
             }
         )
@@ -244,7 +244,10 @@ def update_profile(request):
     """
     try:
         user = get_current_user(request)
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         # 允许更新的字段
         allowed_fields = ["username", "bio", "phone"]
@@ -347,20 +350,20 @@ def delete_avatar(request):
         user = get_current_user(request)
 
         # 获取当前头像 URL
-        profile = (
+        profile_result = (
             supabase_admin.table("profiles")
             .select("avatar_url")
             .eq("id", user.id)
-            .single()
             .execute()
         )
+        profile_data = get_single_or_none(profile_result)
 
-        if profile.data and profile.data.get("avatar_url"):
+        if profile_data and profile_data.get("avatar_url"):
             # 删除 Storage 中的文件
             from services.supabase_storage import storage_service
 
             file_path = storage_service.extract_file_path_from_url(
-                profile.data["avatar_url"], storage_service.BUCKETS["avatars"]
+                profile_data["avatar_url"], storage_service.BUCKETS["avatars"]
             )
             if file_path:
                 storage_service.delete_file(
@@ -393,7 +396,10 @@ def change_password(request):
     """
     try:
         user = get_current_user(request)
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
 
         old_password = data.get("old_password")
         new_password = data.get("new_password")
@@ -438,7 +444,10 @@ def reset_password_request(request):
     }
     """
     try:
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         email = data.get("email")
 
         if not email:
@@ -465,7 +474,10 @@ def refresh_token(request):
     }
     """
     try:
-        data = json.loads(request.body)
+        try:
+            data = parse_json_body(request)
+        except ValueError:
+            return JsonResponse({"error": "Invalid JSON"}, status=400)
         refresh_token = data.get("refresh_token")
 
         if not refresh_token:
