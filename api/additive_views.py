@@ -21,11 +21,13 @@ def search_additive(request):
 
     GET /api/additive/search-additive/
     Query params:
-        - q: 搜索关键词
+        - q 或 query: 搜索关键词（兼容两种参数名）
         - limit: 返回数量限制（默认20）
     """
     try:
-        query = request.GET.get("q", "").strip()
+        # 兼容 q 和 query 两种参数名
+        query = request.GET.get("query") or request.GET.get("q", "")
+        query = query.strip()
         limit = int(request.GET.get("limit") or 20)
 
         if not query:
@@ -54,11 +56,13 @@ def search_ingredient(request):
 
     GET /api/additive/search-ingredient/
     Query params:
-        - q: 搜索关键词
+        - q 或 query: 搜索关键词（兼容两种参数名）
         - limit: 返回数量限制（默认20）
     """
     try:
-        query = request.GET.get("q", "").strip()
+        # 兼容 q 和 query 两种参数名
+        query = request.GET.get("query") or request.GET.get("q", "")
+        query = query.strip()
         limit = int(request.GET.get("limit") or 20)
 
         if not query:
@@ -275,9 +279,16 @@ def get_ingredient_info(request):
                     json_dumps_params={"ensure_ascii": False},
                 )
 
-            q = (payload.get("ingredient") or payload.get("q") or "").strip()
+            q = (
+                payload.get("ingredient")
+                or payload.get("q")
+                or payload.get("query")
+                or ""
+            ).strip()
         else:
-            q = request.GET.get("q", "").strip()
+            # 兼容 q 和 query 两种参数名
+            q = request.GET.get("query") or request.GET.get("q", "")
+            q = q.strip()
 
         if not q:
             return JsonResponse(
