@@ -5,9 +5,6 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-ENV POETRY_VERSION=1.8.2
-ENV POETRY_NO_INTERACTION=1
-ENV POETRY_VIRTUALENVS_CREATE=false
 ENV PIP_NO_CACHE_DIR=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
@@ -25,22 +22,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
+    default-libmysqlclient-dev \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 # 配置 pip 使用清华源
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple && \
     pip config set global.trusted-host pypi.tuna.tsinghua.edu.cn
 
-# 安装 Poetry（使用清华源）
-RUN pip install --no-cache-dir poetry==${POETRY_VERSION}
-
 # 复制依赖文件（利用 Docker 缓存）
-COPY pyproject.toml poetry.lock* ./
+COPY requirements.txt ./
 
-# 配置 Poetry 使用清华源并安装依赖
-RUN poetry config virtualenvs.create false && \
-    poetry source add --priority=primary tsinghua https://pypi.tuna.tsinghua.edu.cn/simple && \
-    poetry install --only main --no-root --no-cache -vvv
+# 安装 Python 依赖（使用清华源）
+RUN pip install --no-cache-dir -r requirements.txt
 
 # 复制项目代码
 COPY . .

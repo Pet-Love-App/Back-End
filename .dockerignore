@@ -1,0 +1,73 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Poetry
+poetry.lock
+pyproject.toml
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 测试
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# 文档
+docs/
+*.md
+!README.md
+
+# 日志
+*.log
+logs/
+
+# 数据库
+*.db
+*.sqlite3
+
+# 媒体文件（开发环境）
+media/
+staticfiles/
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# 脚本（除了 entrypoint）
+scripts/*
+!scripts/entrypoint.sh
+
+# 其他
+.DS_Store
+Thumbs.db
+*.bak
+*.tmp
+
