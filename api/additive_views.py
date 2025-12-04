@@ -16,24 +16,57 @@ from utils import parse_json_body, require_admin
 @require_http_methods(["GET"])
 def search_additive(request):
     """
-    搜索添加剂
+    搜索添加剂（兼容旧项目格式）
 
     GET /api/additive/search-additive/
     Query params:
-        - q 或 query: 搜索关键词（兼容两种参数名）
+        - name 或 q 或 query: 搜索关键词（兼容三种参数名）
+        - fuzzy: 是否模糊搜索（默认 true）
         - limit: 返回数量限制（默认20）
     """
     try:
-        # 兼容 q 和 query 两种参数名
-        query = request.GET.get("query") or request.GET.get("q", "")
+        # 兼容 name、q、query 三种参数名
+        query = (
+            request.GET.get("name")
+            or request.GET.get("query")
+            or request.GET.get("q", "")
+        )
         query = query.strip()
-        limit = int(request.GET.get("limit") or 20)
+        limit = int(request.GET.get("limit") or 10)
 
         if not query:
-            return JsonResponse({"error": "Search query is required"}, status=400)
+            return JsonResponse({"error": "请提供搜索关键词"}, status=400)
 
-        # 搜索添加剂（按名称）
-        result = (
+        # 1. 尝试精确匹配
+        exact_result = (
+            supabase_admin.table("additives")
+            .select("*")
+            .eq("name", query)
+            .limit(1)
+            .execute()
+        )
+
+        if exact_result.data:
+            additive = exact_result.data[0]
+            return JsonResponse(
+                {
+                    "query": query,
+                    "match_type": "exact",
+                    "additive": {
+                        "id": additive.get("id"),
+                        "name": additive.get("name"),
+                        "en_name": additive.get("en_name", ""),
+                        "applicable_range": additive.get("applicable_range", ""),
+                        "type": additive.get("category", additive.get("type", "")),
+                        "description": additive.get("description", ""),
+                        "safety_level": additive.get("safety_level", ""),
+                    },
+                },
+                status=200,
+            )
+
+        # 2. 模糊匹配
+        fuzzy_result = (
             supabase_admin.table("additives")
             .select("*")
             .ilike("name", f"%{query}%")
@@ -41,7 +74,52 @@ def search_additive(request):
             .execute()
         )
 
-        return JsonResponse({"additives": result.data})
+        if fuzzy_result.data:
+            # 如果只有一个结果，直接返回
+            if len(fuzzy_result.data) == 1:
+                additive = fuzzy_result.data[0]
+                return JsonResponse(
+                    {
+                        "query": query,
+                        "match_type": "fuzzy_single",
+                        "additive": {
+                            "id": additive.get("id"),
+                            "name": additive.get("name"),
+                            "en_name": additive.get("en_name", ""),
+                            "applicable_range": additive.get("applicable_range", ""),
+                            "type": additive.get("category", additive.get("type", "")),
+                            "description": additive.get("description", ""),
+                            "safety_level": additive.get("safety_level", ""),
+                        },
+                    },
+                    status=200,
+                )
+            else:
+                # 多个结果：返回列表供用户选择
+                results = [
+                    {
+                        "id": a.get("id"),
+                        "name": a.get("name"),
+                        "en_name": a.get("en_name", ""),
+                        "applicable_range": a.get("applicable_range", ""),
+                        "type": a.get("category", a.get("type", "")),
+                        "description": a.get("description", ""),
+                        "safety_level": a.get("safety_level", ""),
+                    }
+                    for a in fuzzy_result.data
+                ]
+                return JsonResponse(
+                    {
+                        "query": query,
+                        "match_type": "fuzzy_multiple",
+                        "count": len(fuzzy_result.data),
+                        "additives": results,
+                        "message": f"找到 {len(fuzzy_result.data)} 个匹配结果",
+                    },
+                    status=200,
+                )
+        else:
+            return JsonResponse({"error": "目标不在数据库中"}, status=404)
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -51,24 +129,58 @@ def search_additive(request):
 @require_http_methods(["GET"])
 def search_ingredient(request):
     """
-    搜索成分
+    搜索成分（兼容旧项目格式）
 
     GET /api/additive/search-ingredient/
     Query params:
-        - q 或 query: 搜索关键词（兼容两种参数名）
-        - limit: 返回数量限制（默认20）
+        - name 或 q 或 query: 搜索关键词（兼容三种参数名）
+        - limit: 返回数量限制（默认10）
     """
     try:
-        # 兼容 q 和 query 两种参数名
-        query = request.GET.get("query") or request.GET.get("q", "")
+        # 兼容 name、q、query 三种参数名
+        query = (
+            request.GET.get("name")
+            or request.GET.get("query")
+            or request.GET.get("q", "")
+        )
         query = query.strip()
-        limit = int(request.GET.get("limit") or 20)
+        limit = int(request.GET.get("limit") or 10)
 
         if not query:
-            return JsonResponse({"error": "Search query is required"}, status=400)
+            return JsonResponse({"error": "请提供搜索关键词"}, status=400)
 
-        # 搜索成分（按名称）
-        result = (
+        # 1. 尝试精确匹配
+        exact_result = (
+            supabase_admin.table("ingredients")
+            .select("*")
+            .eq("name", query)
+            .limit(1)
+            .execute()
+        )
+
+        if exact_result.data:
+            ingredient = exact_result.data[0]
+            return JsonResponse(
+                {
+                    "query": query,
+                    "match_type": "exact",
+                    "ingredient": {
+                        "id": ingredient.get("id"),
+                        "name": ingredient.get("name"),
+                        "type": ingredient.get("category", ingredient.get("type", "")),
+                        "label": ingredient.get("label", ""),
+                        "desc": ingredient.get(
+                            "description", ingredient.get("desc", "")
+                        ),
+                        "description": ingredient.get("description", ""),
+                        "safety_level": ingredient.get("safety_level", ""),
+                    },
+                },
+                status=200,
+            )
+
+        # 2. 模糊匹配
+        fuzzy_result = (
             supabase_admin.table("ingredients")
             .select("*")
             .ilike("name", f"%{query}%")
@@ -76,7 +188,56 @@ def search_ingredient(request):
             .execute()
         )
 
-        return JsonResponse({"ingredients": result.data})
+        if fuzzy_result.data:
+            # 如果只有一个结果，直接返回
+            if len(fuzzy_result.data) == 1:
+                ingredient = fuzzy_result.data[0]
+                return JsonResponse(
+                    {
+                        "query": query,
+                        "match_type": "fuzzy_single",
+                        "ingredient": {
+                            "id": ingredient.get("id"),
+                            "name": ingredient.get("name"),
+                            "type": ingredient.get(
+                                "category", ingredient.get("type", "")
+                            ),
+                            "label": ingredient.get("label", ""),
+                            "desc": ingredient.get(
+                                "description", ingredient.get("desc", "")
+                            ),
+                            "description": ingredient.get("description", ""),
+                            "safety_level": ingredient.get("safety_level", ""),
+                        },
+                    },
+                    status=200,
+                )
+            else:
+                # 多个结果：返回列表供用户选择
+                results = [
+                    {
+                        "id": i.get("id"),
+                        "name": i.get("name"),
+                        "type": i.get("category", i.get("type", "")),
+                        "label": i.get("label", ""),
+                        "desc": i.get("description", i.get("desc", "")),
+                        "description": i.get("description", ""),
+                        "safety_level": i.get("safety_level", ""),
+                    }
+                    for i in fuzzy_result.data
+                ]
+                return JsonResponse(
+                    {
+                        "query": query,
+                        "match_type": "fuzzy_multiple",
+                        "count": len(fuzzy_result.data),
+                        "ingredients": results,
+                        "message": f"找到 {len(fuzzy_result.data)} 个匹配结果",
+                    },
+                    status=200,
+                )
+        else:
+            return JsonResponse({"error": "目标不在数据库中"}, status=404)
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -200,7 +361,13 @@ def _fetch_summary(title: str, timeout: int = 20):
 
     import requests
 
-    key = os.getenv("BAIDU_APPBUILDER_KEY", "")
+    # 兼容多种环境变量名
+    key = (
+        os.getenv("BAIDU_APPBUILDER_KEY")
+        or os.getenv("BAIDU_APPBUILDER_API_KEY")
+        or os.getenv("BAIDU_API_KEY")
+        or ""
+    )
     if not key:
         return (0, "BAIDU_APPBUILDER_KEY not configured")
 
