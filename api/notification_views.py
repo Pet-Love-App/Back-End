@@ -29,8 +29,9 @@ def list_notifications(request):
     try:
         user = get_current_user(request)
 
-        page = int(request.GET.get("page", 1))
-        per_page = int(request.GET.get("per_page", 20))
+        # 安全地获取分页参数
+        page = int(request.GET.get("page") or 1)
+        per_page = int(request.GET.get("per_page") or 20)
         unread_only = request.GET.get("unread_only", "false").lower() == "true"
 
         # 计算偏移量
@@ -44,9 +45,15 @@ def list_notifications(request):
             query = query.eq("is_read", False)
 
         # 分页和排序
-        result = query.order("created_at", desc=True).range(offset, offset + per_page - 1).execute()
+        result = (
+            query.order("created_at", desc=True)
+            .range(offset, offset + per_page - 1)
+            .execute()
+        )
 
-        return JsonResponse({"notifications": result.data, "page": page, "per_page": per_page})
+        return JsonResponse(
+            {"notifications": result.data, "page": page, "per_page": per_page}
+        )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -130,9 +137,9 @@ def mark_all_as_read(request):
         user = get_current_user(request)
 
         # 标记所有为已读
-        supabase_admin.table("notifications").update({"is_read": True}).eq("user_id", user.id).eq(
-            "is_read", False
-        ).execute()
+        supabase_admin.table("notifications").update({"is_read": True}).eq(
+            "user_id", user.id
+        ).eq("is_read", False).execute()
 
         return JsonResponse({"message": "All notifications marked as read"})
 
@@ -166,7 +173,9 @@ def delete_notification(request, notification_id):
             return JsonResponse({"error": "Notification not found"}, status=404)
 
         # 删除通知
-        supabase_admin.table("notifications").delete().eq("id", notification_id).execute()
+        supabase_admin.table("notifications").delete().eq(
+            "id", notification_id
+        ).execute()
 
         return JsonResponse({"message": "Notification deleted successfully"})
 
@@ -222,7 +231,9 @@ def create_notification(request):
         content = data.get("content")
 
         if not user_id or not notification_type or not title:
-            return JsonResponse({"error": "user_id, type, and title are required"}, status=400)
+            return JsonResponse(
+                {"error": "user_id, type, and title are required"}, status=400
+            )
 
         # 准备通知数据
         notification_data = {
@@ -235,10 +246,15 @@ def create_notification(request):
         }
 
         # 插入通知
-        result = supabase_admin.table("notifications").insert(notification_data).execute()
+        result = (
+            supabase_admin.table("notifications").insert(notification_data).execute()
+        )
 
         return JsonResponse(
-            {"message": "Notification created successfully", "notification": result.data[0]},
+            {
+                "message": "Notification created successfully",
+                "notification": result.data[0],
+            },
             status=201,
         )
 

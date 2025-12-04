@@ -31,8 +31,9 @@ def list_catfoods(request):
         - tag: 标签筛选（可选）
     """
     try:
-        page = int(request.GET.get("page", 1))
-        per_page = int(request.GET.get("per_page", 20))
+        # 安全地获取分页参数
+        page = int(request.GET.get("page") or 1)
+        per_page = int(request.GET.get("per_page") or 20)
         search = request.GET.get("search", "").strip()
         brand = request.GET.get("brand", "").strip()
         tag = request.GET.get("tag", "").strip()
@@ -70,19 +71,32 @@ def list_catfoods(request):
                 )
 
         # 分页和排序
-        result = query.order("created_at", desc=True).range(offset, offset + per_page - 1).execute()
+        result = (
+            query.order("created_at", desc=True)
+            .range(offset, offset + per_page - 1)
+            .execute()
+        )
 
         # 获取总数（用于分页）
         count_query = supabase_admin.table("catfoods").select("id", count="exact")
         if search:
-            count_query = count_query.or_(f"name.ilike.%{search}%,brand.ilike.%{search}%")
+            count_query = count_query.or_(
+                f"name.ilike.%{search}%,brand.ilike.%{search}%"
+            )
         if brand:
             count_query = count_query.eq("brand", brand)
         count_result = count_query.execute()
-        total = count_result.count if hasattr(count_result, "count") else len(result.data)
+        total = (
+            count_result.count if hasattr(count_result, "count") else len(result.data)
+        )
 
         return JsonResponse(
-            {"catfoods": result.data, "page": page, "per_page": per_page, "total": total}
+            {
+                "catfoods": result.data,
+                "page": page,
+                "per_page": per_page,
+                "total": total,
+            }
         )
 
     except Exception as e:
@@ -100,7 +114,11 @@ def get_catfood_detail(request, catfood_id):
     try:
         # 查询猫粮基本信息
         catfood = (
-            supabase_admin.table("catfoods").select("*").eq("id", catfood_id).single().execute()
+            supabase_admin.table("catfoods")
+            .select("*")
+            .eq("id", catfood_id)
+            .single()
+            .execute()
         )
 
         if not catfood.data:
@@ -184,7 +202,11 @@ def create_catfood(request):
 
         # 检查管理员权限
         profile = (
-            supabase_admin.table("profiles").select("is_admin").eq("id", user.id).single().execute()
+            supabase_admin.table("profiles")
+            .select("is_admin")
+            .eq("id", user.id)
+            .single()
+            .execute()
         )
 
         if not profile.data or not profile.data.get("is_admin"):
@@ -212,7 +234,9 @@ def create_catfood(request):
             file_extension = image_file.name.split(".")[-1]
 
             # 先插入猫粮以获取 ID
-            temp_result = supabase_admin.table("catfoods").insert(catfood_data).execute()
+            temp_result = (
+                supabase_admin.table("catfoods").insert(catfood_data).execute()
+            )
             catfood_id = temp_result.data[0]["id"]
 
             # 上传图片
@@ -241,7 +265,9 @@ def create_catfood(request):
                 "ingredient_id": ingredient.get("ingredient_id"),
                 "percentage": ingredient.get("percentage"),
             }
-            supabase_admin.table("catfood_ingredients").insert(ingredient_data).execute()
+            supabase_admin.table("catfood_ingredients").insert(
+                ingredient_data
+            ).execute()
 
         # 处理添加剂
         additives = json.loads(request.POST.get("additives", "[]"))
@@ -262,7 +288,8 @@ def create_catfood(request):
             supabase_admin.table("catfood_tag_relations").insert(tag_data).execute()
 
         return JsonResponse(
-            {"message": "Catfood created successfully", "catfood_id": catfood_id}, status=201
+            {"message": "Catfood created successfully", "catfood_id": catfood_id},
+            status=201,
         )
 
     except Exception as e:
@@ -283,7 +310,11 @@ def update_catfood(request, catfood_id):
 
         # 检查管理员权限
         profile = (
-            supabase_admin.table("profiles").select("is_admin").eq("id", user.id).single().execute()
+            supabase_admin.table("profiles")
+            .select("is_admin")
+            .eq("id", user.id)
+            .single()
+            .execute()
         )
 
         if not profile.data or not profile.data.get("is_admin"):
@@ -291,7 +322,11 @@ def update_catfood(request, catfood_id):
 
         # 检查猫粮是否存在
         catfood = (
-            supabase_admin.table("catfoods").select("*").eq("id", catfood_id).single().execute()
+            supabase_admin.table("catfoods")
+            .select("*")
+            .eq("id", catfood_id)
+            .single()
+            .execute()
         )
 
         if not catfood.data:
@@ -300,16 +335,30 @@ def update_catfood(request, catfood_id):
         data = json.loads(request.body)
 
         # 允许更新的字段
-        allowed_fields = ["name", "brand", "description", "price", "weight", "image_url"]
+        allowed_fields = [
+            "name",
+            "brand",
+            "description",
+            "price",
+            "weight",
+            "image_url",
+        ]
         update_data = {k: v for k, v in data.items() if k in allowed_fields}
 
         if not update_data:
             return JsonResponse({"error": "No valid fields to update"}, status=400)
 
         # 更新
-        result = supabase_admin.table("catfoods").update(update_data).eq("id", catfood_id).execute()
+        result = (
+            supabase_admin.table("catfoods")
+            .update(update_data)
+            .eq("id", catfood_id)
+            .execute()
+        )
 
-        return JsonResponse({"message": "Catfood updated successfully", "catfood": result.data[0]})
+        return JsonResponse(
+            {"message": "Catfood updated successfully", "catfood": result.data[0]}
+        )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -329,7 +378,11 @@ def delete_catfood(request, catfood_id):
 
         # 检查管理员权限
         profile = (
-            supabase_admin.table("profiles").select("is_admin").eq("id", user.id).single().execute()
+            supabase_admin.table("profiles")
+            .select("is_admin")
+            .eq("id", user.id)
+            .single()
+            .execute()
         )
 
         if not profile.data or not profile.data.get("is_admin"):
@@ -337,7 +390,11 @@ def delete_catfood(request, catfood_id):
 
         # 检查猫粮是否存在
         catfood = (
-            supabase_admin.table("catfoods").select("*").eq("id", catfood_id).single().execute()
+            supabase_admin.table("catfoods")
+            .select("*")
+            .eq("id", catfood_id)
+            .single()
+            .execute()
         )
 
         if not catfood.data:
@@ -407,9 +464,13 @@ def rate_catfood(request, catfood_id):
             )
         else:
             # 创建新评分
-            result = supabase_admin.table("catfood_ratings").insert(rating_data).execute()
+            result = (
+                supabase_admin.table("catfood_ratings").insert(rating_data).execute()
+            )
 
-        return JsonResponse({"message": "Rating submitted successfully", "rating": result.data[0]})
+        return JsonResponse(
+            {"message": "Rating submitted successfully", "rating": result.data[0]}
+        )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -441,7 +502,9 @@ def favorite_catfood(request, catfood_id):
             supabase_admin.table("catfood_favorites").delete().eq(
                 "id", existing.data[0]["id"]
             ).execute()
-            return JsonResponse({"message": "Unfavorited successfully", "favorited": False})
+            return JsonResponse(
+                {"message": "Unfavorited successfully", "favorited": False}
+            )
         else:
             # 添加收藏
             favorite_data = {
@@ -449,7 +512,9 @@ def favorite_catfood(request, catfood_id):
                 "user_id": user.id,
             }
             supabase_admin.table("catfood_favorites").insert(favorite_data).execute()
-            return JsonResponse({"message": "Favorited successfully", "favorited": True})
+            return JsonResponse(
+                {"message": "Favorited successfully", "favorited": True}
+            )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -556,7 +621,11 @@ def like_catfood(request):
 
         # 检查猫粮是否存在
         catfood = (
-            supabase_admin.table("catfoods").select("id").eq("id", catfood_id).single().execute()
+            supabase_admin.table("catfoods")
+            .select("id")
+            .eq("id", catfood_id)
+            .single()
+            .execute()
         )
 
         if not catfood.data:
@@ -578,7 +647,9 @@ def like_catfood(request):
         like_data = {"user_id": user.id, "catfood_id": catfood_id}
         result = supabase_admin.table("catfood_likes").insert(like_data).execute()
 
-        return JsonResponse({"message": "Liked successfully", "like": result.data[0]}, status=201)
+        return JsonResponse(
+            {"message": "Liked successfully", "like": result.data[0]}, status=201
+        )
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON format"}, status=400)
@@ -640,7 +711,11 @@ def toggle_like_catfood(request):
 
         # 检查猫粮是否存在
         catfood = (
-            supabase_admin.table("catfoods").select("id").eq("id", catfood_id).single().execute()
+            supabase_admin.table("catfoods")
+            .select("id")
+            .eq("id", catfood_id)
+            .single()
+            .execute()
         )
 
         if not catfood.data:
@@ -725,7 +800,9 @@ def get_catfood_likes_count(request, catfood_id):
             .execute()
         )
 
-        return JsonResponse({"catfood_id": catfood_id, "likes_count": result.count or 0})
+        return JsonResponse(
+            {"catfood_id": catfood_id, "likes_count": result.count or 0}
+        )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -749,7 +826,12 @@ def get_catfood_by_barcode(request):
             return JsonResponse({"error": "Barcode is required"}, status=400)
 
         # 查询猫粮
-        result = supabase_admin.table("catfoods").select("*").eq("barcode", barcode).execute()
+        result = (
+            supabase_admin.table("catfoods")
+            .select("*")
+            .eq("barcode", barcode)
+            .execute()
+        )
 
         if not result.data:
             return JsonResponse({"error": "Catfood not found"}, status=404)
@@ -779,11 +861,15 @@ def scan_barcode(request):
         # 检查文件类型
         allowed_types = ["image/jpeg", "image/png", "image/jpg"]
         if image_file.content_type not in allowed_types:
-            return JsonResponse({"error": "Invalid file type. Only JPEG, PNG allowed"}, status=400)
+            return JsonResponse(
+                {"error": "Invalid file type. Only JPEG, PNG allowed"}, status=400
+            )
 
         # 检查文件大小（最大 5MB）
         if image_file.size > 5 * 1024 * 1024:
-            return JsonResponse({"error": "File too large. Maximum size is 5MB"}, status=400)
+            return JsonResponse(
+                {"error": "File too large. Maximum size is 5MB"}, status=400
+            )
 
         # TODO: 集成条形码识别库（如 pyzbar）
         # 目前返回提示信息
@@ -814,13 +900,18 @@ def get_catfood_comments(request, catfood_id):
         - per_page: 每页数量（默认20）
     """
     try:
-        page = int(request.GET.get("page", 1))
-        per_page = int(request.GET.get("per_page", 20))
+        # 安全地获取分页参数
+        page = int(request.GET.get("page") or 1)
+        per_page = int(request.GET.get("per_page") or 20)
         offset = (page - 1) * per_page
 
         # 检查猫粮是否存在
         catfood = (
-            supabase_admin.table("catfoods").select("id").eq("id", catfood_id).single().execute()
+            supabase_admin.table("catfoods")
+            .select("id")
+            .eq("id", catfood_id)
+            .single()
+            .execute()
         )
 
         if not catfood.data:

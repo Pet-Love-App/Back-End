@@ -3,8 +3,6 @@
 使用 Supabase 进行数据操作
 """
 
-import json
-
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
@@ -26,8 +24,9 @@ def list_posts(request):
         - per_page: 每页数量（默认20）
     """
     try:
-        page = int(request.GET.get("page", 1))
-        per_page = int(request.GET.get("per_page", 20))
+        # 安全地获取分页参数
+        page = int(request.GET.get("page") or 1)
+        per_page = int(request.GET.get("per_page") or 20)
 
         # 计算偏移量
         offset = (page - 1) * per_page
@@ -102,7 +101,11 @@ def create_post(request):
             media_urls.append(file_url)
 
         return JsonResponse(
-            {"message": "Post created successfully", "post_id": post_id, "media_urls": media_urls},
+            {
+                "message": "Post created successfully",
+                "post_id": post_id,
+                "media_urls": media_urls,
+            },
             status=201,
         )
 
@@ -137,7 +140,10 @@ def delete_post(request, post_id):
 
         # 查询并删除关联的媒体文件
         media = (
-            supabase_admin.table("post_media").select("file_url").eq("post_id", post_id).execute()
+            supabase_admin.table("post_media")
+            .select("file_url")
+            .eq("post_id", post_id)
+            .execute()
         )
 
         for media_item in media.data:
@@ -179,7 +185,9 @@ def favorite_post(request, post_id):
             supabase_admin.table("post_favorites").delete().eq(
                 "id", existing.data[0]["id"]
             ).execute()
-            return JsonResponse({"message": "Unfavorited successfully", "favorited": False})
+            return JsonResponse(
+                {"message": "Unfavorited successfully", "favorited": False}
+            )
         else:
             # 添加收藏
             favorite_data = {
@@ -187,7 +195,9 @@ def favorite_post(request, post_id):
                 "user_id": user.id,
             }
             supabase_admin.table("post_favorites").insert(favorite_data).execute()
-            return JsonResponse({"message": "Favorited successfully", "favorited": True})
+            return JsonResponse(
+                {"message": "Favorited successfully", "favorited": True}
+            )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)

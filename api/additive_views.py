@@ -26,7 +26,7 @@ def search_additive(request):
     """
     try:
         query = request.GET.get("q", "").strip()
-        limit = int(request.GET.get("limit", 20))
+        limit = int(request.GET.get("limit") or 20)
 
         if not query:
             return JsonResponse({"error": "Search query is required"}, status=400)
@@ -59,7 +59,7 @@ def search_ingredient(request):
     """
     try:
         query = request.GET.get("q", "").strip()
-        limit = int(request.GET.get("limit", 20))
+        limit = int(request.GET.get("limit") or 20)
 
         if not query:
             return JsonResponse({"error": "Search query is required"}, status=400)
@@ -100,7 +100,11 @@ def add_ingredient(request):
 
         # 检查管理员权限
         profile = (
-            supabase_admin.table("profiles").select("is_admin").eq("id", user.id).single().execute()
+            supabase_admin.table("profiles")
+            .select("is_admin")
+            .eq("id", user.id)
+            .single()
+            .execute()
         )
 
         if not profile.data or not profile.data.get("is_admin"):
@@ -113,7 +117,9 @@ def add_ingredient(request):
             return JsonResponse({"error": "Name is required"}, status=400)
 
         # 检查是否已存在
-        existing = supabase_admin.table("ingredients").select("id").eq("name", name).execute()
+        existing = (
+            supabase_admin.table("ingredients").select("id").eq("name", name).execute()
+        )
 
         if existing.data:
             return JsonResponse({"error": "Ingredient already exists"}, status=400)
@@ -131,7 +137,8 @@ def add_ingredient(request):
         result = supabase_admin.table("ingredients").insert(ingredient_data).execute()
 
         return JsonResponse(
-            {"message": "Ingredient added successfully", "ingredient": result.data[0]}, status=201
+            {"message": "Ingredient added successfully", "ingredient": result.data[0]},
+            status=201,
         )
 
     except Exception as e:
@@ -159,7 +166,11 @@ def add_additive(request):
 
         # 检查管理员权限
         profile = (
-            supabase_admin.table("profiles").select("is_admin").eq("id", user.id).single().execute()
+            supabase_admin.table("profiles")
+            .select("is_admin")
+            .eq("id", user.id)
+            .single()
+            .execute()
         )
 
         if not profile.data or not profile.data.get("is_admin"):
@@ -172,7 +183,9 @@ def add_additive(request):
             return JsonResponse({"error": "Name is required"}, status=400)
 
         # 检查是否已存在
-        existing = supabase_admin.table("additives").select("id").eq("name", name).execute()
+        existing = (
+            supabase_admin.table("additives").select("id").eq("name", name).execute()
+        )
 
         if existing.data:
             return JsonResponse({"error": "Additive already exists"}, status=400)
@@ -190,7 +203,8 @@ def add_additive(request):
         result = supabase_admin.table("additives").insert(additive_data).execute()
 
         return JsonResponse(
-            {"message": "Additive added successfully", "additive": result.data[0]}, status=201
+            {"message": "Additive added successfully", "additive": result.data[0]},
+            status=201,
         )
 
     except Exception as e:
@@ -285,7 +299,11 @@ def get_ingredient_info(request):
             return JsonResponse(
                 {
                     "ok": False,
-                    "error": {"code": "network", "message": "request failed", "detail": data},
+                    "error": {
+                        "code": "network",
+                        "message": "request failed",
+                        "detail": data,
+                    },
                 },
                 status=502,
                 json_dumps_params={"ensure_ascii": False},
