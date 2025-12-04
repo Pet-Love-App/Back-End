@@ -12,7 +12,7 @@ Pet Love 是一个功能完整的宠物社区平台，提供宠物管理、猫�
 - **认证**: Supabase Auth
 - **文件存储**: Supabase Storage
 - **AI 服务**: OpenAI API
-- **OCR**: PaddleOCR
+- **OCR**: 阿里云高精版OCR
 - **外部 API**: Baidu AppBuilder
 
 ---
@@ -115,6 +115,10 @@ SUPABASE_SERVICE_KEY=your_service_role_key
 OPENAI_API_KEY=your_openai_api_key
 OPENAI_API_BASE=https://api.openai.com/v1
 OPENAI_MODEL=gpt-3.5-turbo
+
+# 阿里云OCR配置（用于图像文字识别）
+ALIYUN_OCR_APPCODE=your_aliyun_ocr_appcode
+ALIYUN_OCR_URL=https://gjbsb.market.alicloudapi.com/ocrservice/advanced
 
 # Baidu AppBuilder 配置（用于成分查询）
 BAIDU_APPBUILDER_API_KEY=your_baidu_api_key
@@ -330,8 +334,9 @@ WHERE email = 'admin@example.com';
 ### Q4: OCR 识别不准确怎么办？
 
 - 确保图片清晰度足够
-- 调整 `utils/ocr_utils.py` 中的预处理参数
+- 检查 `ALIYUN_OCR_APPCODE` 是否正确配置
 - 使用更高分辨率的图片
+- 验证阿里云OCR服务配额是否充足
 
 ### Q5: AI 分析返回错误？
 

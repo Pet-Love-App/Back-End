@@ -107,9 +107,24 @@ def list_catfoods(request):
                 catfood_id = like["catfood_id"]
                 like_counts[catfood_id] = like_counts.get(catfood_id, 0) + 1
 
-            # 将点赞数添加到每个猫粮数据中
+            # 为每个猫粮添加点赞数和 percentData
             for catfood in result.data:
                 catfood["like_count"] = like_counts.get(catfood["id"], 0)
+
+                # 组装 percentData（只包含非 null 的字段）
+                percent_data = {}
+                fields_to_check = {
+                    "crude_protein": catfood.get("crude_protein"),
+                    "crude_fat": catfood.get("crude_fat"),
+                    "carbohydrates": catfood.get("carbohydrates"),
+                    "crude_fiber": catfood.get("crude_fiber"),
+                    "crude_ash": catfood.get("crude_ash"),
+                    "others": catfood.get("others"),
+                }
+                for key, value in fields_to_check.items():
+                    if value is not None:
+                        percent_data[key] = value
+                catfood["percentData"] = percent_data
 
         return JsonResponse(
             {
@@ -189,6 +204,22 @@ def get_catfood_detail(request, catfood_id):
         )
         like_count = likes.count if hasattr(likes, "count") else 0
 
+        # 组装 percentData（参考旧项目逻辑）
+        # 只包含非 null 的字段（前端使用 Object.keys() 遍历）
+        percent_data = {}
+        fields_to_check = {
+            "crude_protein": catfood_data.get("crude_protein"),
+            "crude_fat": catfood_data.get("crude_fat"),
+            "carbohydrates": catfood_data.get("carbohydrates"),
+            "crude_fiber": catfood_data.get("crude_fiber"),
+            "crude_ash": catfood_data.get("crude_ash"),
+            "others": catfood_data.get("others"),
+        }
+        # 只添加非 null 的字段
+        for key, value in fields_to_check.items():
+            if value is not None:
+                percent_data[key] = value
+
         # 组合数据
         catfood_detail = {
             **catfood_data,
@@ -197,7 +228,8 @@ def get_catfood_detail(request, catfood_id):
             "tags": tags.data,
             "avg_rating": avg_rating,
             "rating_count": rating_count,
-            "like_count": like_count,  # ✅ 添加点赞数量
+            "like_count": like_count,
+            "percentData": percent_data,  # ✅ 添加组装的 percentData
         }
 
         return JsonResponse({"catfood": catfood_detail})
@@ -384,7 +416,6 @@ def update_catfood(request, catfood_id):
             "crude_fiber",
             "crude_ash",
             "others",
-            "moisture",
         }
 
         # 处理 percent_data（参考旧项目逻辑）
@@ -394,6 +425,7 @@ def update_catfood(request, catfood_id):
         )
         if percent_data and isinstance(percent_data, dict):
             # 字段名映射表：AI返回的简短字段名 -> 数据库完整字段名
+            # 注意：数据库只有以下6个营养成分字段
             field_mapping = {
                 "protein": "crude_protein",
                 "fat": "crude_fat",
@@ -406,7 +438,7 @@ def update_catfood(request, catfood_id):
                 "crude_ash": "crude_ash",
                 "carbohydrates": "carbohydrates",
                 "others": "others",
-                "moisture": "moisture",
+                # moisture 字段在数据库中不存在，忽略
             }
 
             # 将 percent_data 的各个字段添加到 payload 中（带字段名映射）

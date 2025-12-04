@@ -512,6 +512,7 @@ def save_report(request):
         percent_data = data.get("percent_data", {})
         if percent_data and isinstance(percent_data, dict):
             # 字段名映射表：AI返回的字段名 -> 数据库字段名
+            # 注意：数据库只有以下6个营养成分字段
             field_mapping = {
                 "protein": "crude_protein",
                 "fat": "crude_fat",
@@ -524,7 +525,7 @@ def save_report(request):
                 "crude_ash": "crude_ash",
                 "carbohydrates": "carbohydrates",
                 "others": "others",
-                "moisture": "moisture",
+                # moisture 字段在数据库中不存在，忽略
             }
 
             for ai_key, db_key in field_mapping.items():
