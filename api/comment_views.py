@@ -20,10 +20,65 @@ def list_comments(request):
 
     GET /api/comments/
     Query params:
-        - target_type: post/catfood/report
-        - target_id: 目标ID
+        - target_type: post/catfood/report（可选，如果 my=true）
+        - target_id: 目标ID（可选，如果 my=true）
+        - my: true/false（获取当前用户的所有评论）
+        - page: 页码（默认1）
+        - page_size: 每页数量（默认20）
     """
     try:
+        # 检查是否是获取当前用户的评论
+        my_comments = request.GET.get("my", "").lower() == "true"
+
+        if my_comments:
+            # 获取当前用户的所有评论（需要认证）
+            auth_header = request.headers.get("Authorization", "")
+            if not auth_header.startswith("Bearer "):
+                return JsonResponse({"error": "Authentication required"}, status=401)
+
+            from middleware.supabase_auth import get_current_user
+
+            try:
+                user = get_current_user(request)
+            except Exception:
+                return JsonResponse({"error": "Invalid token"}, status=401)
+
+            # 分页参数
+            page = int(request.GET.get("page", 1))
+            page_size = int(request.GET.get("page_size", 20))
+            offset = (page - 1) * page_size
+
+            # 查询当前用户的评论
+            result = (
+                supabase_admin.table("comments")
+                .select("*, author:profiles(id, username, avatar_url)")
+                .eq("author_id", user.id)
+                .is_("parent_id", "null")  # 只查询顶级评论
+                .order("created_at", desc=True)
+                .range(offset, offset + page_size - 1)
+                .execute()
+            )
+
+            # 为每个评论查询回复数量（可选）
+            for comment in result.data:
+                replies = (
+                    supabase_admin.table("comments")
+                    .select("id", count="exact")
+                    .eq("parent_id", comment["id"])
+                    .execute()
+                )
+                comment["reply_count"] = len(replies.data) if replies.data else 0
+
+            return JsonResponse(
+                {
+                    "results": result.data,
+                    "count": len(result.data),
+                    "next": len(result.data) == page_size,
+                    "previous": page > 1,
+                }
+            )
+
+        # 原有逻辑：根据 target_type 和 target_id 获取评论
         target_type = request.GET.get("target_type")
         target_id = request.GET.get("target_id")
 
