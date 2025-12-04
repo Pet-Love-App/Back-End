@@ -70,14 +70,22 @@ def ocr_recognize(request):
         # 准备请求阿里云OCR API
         headers = {
             "Authorization": f"APPCODE {ALIYUN_OCR_APPCODE}",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+            "Content-Type": "application/json; charset=UTF-8",
         }
 
-        # 发送POST请求
-        body_data = {"img": image_base64}
+        # 构建请求体（JSON格式）
+        body_data = {
+            "img": image_base64,
+            "prob": False,  # 不需要置信度
+            "charInfo": False,  # 不需要单字识别
+            "rotate": False,  # 不需要自动旋转
+            "table": False,  # 不需要表格识别
+            "sortPage": False,  # 从左到右，从上到下的顺序
+        }
 
+        # 发送POST请求（使用json参数自动序列化并设置正确的Content-Type）
         response = requests.post(
-            ALIYUN_OCR_URL, headers=headers, data=body_data, timeout=30
+            ALIYUN_OCR_URL, headers=headers, json=body_data, timeout=30
         )
 
         # 检查响应状态
@@ -95,23 +103,34 @@ def ocr_recognize(request):
         # 解析响应结果
         result_data = response.json()
 
+        # 检查API返回是否成功
+        if not isinstance(result_data, dict):
+            return JsonResponse(
+                {"error": "Invalid OCR API response format"}, status=500
+            )
+
         # 阿里云OCR返回格式示例：
         # {
+        #   "success": true,
         #   "content": "识别的完整文本",
         #   "ret": [
         #     {
         #       "word": "单个文字/词语",
-        #       "rect": {...},
-        #       "prob": {...}
+        #       "rect": {...}
         #     }
         #   ],
-        #   "prism_wordsInfo": [...]
+        #   "prism_wordsInfo": [
+        #     {
+        #       "word": "单个文字/词语",
+        #       "pos": [...]
+        #     }
+        #   ]
         # }
 
         # 处理返回结果，转换为统一格式
         detected_items = []
 
-        # 优先使用 prism_wordsInfo（更详细）
+        # 优先使用 prism_wordsInfo（更详细的字段信息）
         if "prism_wordsInfo" in result_data and result_data["prism_wordsInfo"]:
             for item in result_data["prism_wordsInfo"]:
                 word = item.get("word", "").strip()
@@ -122,24 +141,25 @@ def ocr_recognize(request):
                             "confidence": 0.95,  # 阿里云OCR通常不返回置信度，给一个默认高值
                         }
                     )
-        # 备用方案：使用 ret 字段
+        # 备用方案1：使用 ret 字段（基础识别结果）
         elif "ret" in result_data and result_data["ret"]:
             for item in result_data["ret"]:
                 word = item.get("word", "").strip()
                 if word:
                     detected_items.append({"text": word, "confidence": 0.95})
-        # 最后备用：直接使用 content 字段
+        # 备用方案2：直接使用 content 字段（完整文本）
         elif "content" in result_data and result_data["content"]:
             content = result_data["content"].strip()
             if content:
-                # 将整段文本按行或逗号分割
-                words = [
-                    w.strip()
-                    for w in content.replace("\n", ",").split(",")
-                    if w.strip()
-                ]
+                # 将整段文本按逗号、换行、空格等分割成词语
+                # 保持原始的词语顺序
+                import re
+
+                words = re.split(r"[,，\n\s]+", content)
                 for word in words:
-                    detected_items.append({"text": word, "confidence": 0.95})
+                    word = word.strip()
+                    if word:
+                        detected_items.append({"text": word, "confidence": 0.95})
 
         # 如果没有识别到任何文本
         if not detected_items:
