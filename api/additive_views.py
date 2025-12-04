@@ -119,7 +119,17 @@ def search_additive(request):
                     status=200,
                 )
         else:
-            return JsonResponse({"error": "目标不在数据库中"}, status=404)
+            # 未找到结果 - 返回200状态码，避免在前端产生错误
+            return JsonResponse(
+                {
+                    "query": query,
+                    "match_type": "not_found",
+                    "count": 0,
+                    "additives": [],
+                    "message": "目标不在数据库中",
+                },
+                status=200,
+            )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)
@@ -237,7 +247,17 @@ def search_ingredient(request):
                     status=200,
                 )
         else:
-            return JsonResponse({"error": "目标不在数据库中"}, status=404)
+            # 未找到结果 - 返回200状态码，避免在前端产生错误
+            return JsonResponse(
+                {
+                    "query": query,
+                    "match_type": "not_found",
+                    "count": 0,
+                    "ingredients": [],
+                    "message": "目标不在数据库中",
+                },
+                status=200,
+            )
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)

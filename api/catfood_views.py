@@ -311,14 +311,17 @@ def create_catfood(request):
 @csrf_exempt
 @require_http_methods(["PUT", "PATCH"])
 @require_auth
-@require_admin
 def update_catfood(request, catfood_id):
     """
-    更新猫粮信息（需要管理员权限）
+    更新猫粮信息
 
-    支持部分字段更新，并可同时更新关联的成分/添加剂/标签
+    权限规则：
+    - 更新基本信息（名称、品牌等）：需要管理员权限
+    - 更新关联数据（成分、添加剂）：所有登录用户均可
     """
     try:
+        user = get_current_user(request)
+
         # 确认猫粮存在
         catfood_result = (
             supabase_admin.table("catfoods").select("*").eq("id", catfood_id).execute()
@@ -331,6 +334,35 @@ def update_catfood(request, catfood_id):
             payload = parse_json_body(request, default={})
         except ValueError:
             return JsonResponse({"error": "Invalid JSON body"}, status=400)
+
+        # 检查是否只更新关联数据（成分/添加剂/标签）
+        relation_only_fields = {"ingredient", "additive", "tags"}
+        is_relation_only = all(k in relation_only_fields for k in payload.keys())
+
+        # 如果更新基本字段，需要管理员权限
+        if not is_relation_only:
+            # 检查管理员权限
+            try:
+                profile_result = (
+                    supabase_admin.table("user_profiles")
+                    .select("is_admin")
+                    .eq("user_id", user.id)
+                    .execute()
+                )
+                is_admin = False
+                if profile_result.data:
+                    is_admin = profile_result.data[0].get("is_admin", False)
+
+                if not is_admin:
+                    return JsonResponse(
+                        {"error": "Admin permission required"},
+                        status=403,
+                    )
+            except Exception:
+                return JsonResponse(
+                    {"error": "Failed to check permissions"},
+                    status=500,
+                )
 
         # 允许更新的字段（基本信息和营养分析）
         allowed_fields = {
@@ -394,41 +426,84 @@ def update_catfood(request, catfood_id):
             ).execute()
 
         # 处理关联数据（如果提供）
+        # 支持两种格式：
+        # 1. 简单ID数组：{"ingredient": [1, 2, 3]}（前端扫描功能使用）
+        # 2. 对象数组：{"ingredients": [{"ingredient_id": 1, "percentage": 10}]}（完整格式）
         try:
-            if "ingredients" in payload:
+            # 处理成分关联（兼容 ingredient 和 ingredients 两种字段名）
+            ingredient_data = payload.get("ingredient") or payload.get("ingredients")
+            if ingredient_data is not None:
+                # 删除旧关联
                 supabase_admin.table("catfood_ingredients").delete().eq(
                     "catfood_id", catfood_id
                 ).execute()
-                ingredients = payload.get("ingredients") or []
-                ing_data = [
-                    {
-                        "catfood_id": catfood_id,
-                        "ingredient_id": item.get("ingredient_id"),
-                        "percentage": item.get("percentage"),
-                    }
-                    for item in ingredients
-                    if item.get("ingredient_id")
-                ]
-                if ing_data:
-                    supabase_admin.table("catfood_ingredients").insert(
-                        ing_data
-                    ).execute()
 
-            if "additives" in payload:
+                if ingredient_data:
+                    # 判断是简单ID数组还是对象数组
+                    if isinstance(ingredient_data[0], (int, str)):
+                        # 简单ID数组格式
+                        ing_data = [
+                            {
+                                "catfood_id": catfood_id,
+                                "ingredient_id": int(ing_id),
+                                "order": idx,
+                            }
+                            for idx, ing_id in enumerate(ingredient_data)
+                        ]
+                    else:
+                        # 对象数组格式
+                        ing_data = [
+                            {
+                                "catfood_id": catfood_id,
+                                "ingredient_id": item.get("ingredient_id"),
+                                "percentage": item.get("percentage"),
+                                "order": idx,
+                            }
+                            for idx, item in enumerate(ingredient_data)
+                            if item.get("ingredient_id")
+                        ]
+
+                    if ing_data:
+                        supabase_admin.table("catfood_ingredients").insert(
+                            ing_data
+                        ).execute()
+
+            # 处理添加剂关联（兼容 additive 和 additives 两种字段名）
+            additive_data = payload.get("additive") or payload.get("additives")
+            if additive_data is not None:
+                # 删除旧关联
                 supabase_admin.table("catfood_additives").delete().eq(
                     "catfood_id", catfood_id
                 ).execute()
-                additives = payload.get("additives") or []
-                add_data = [
-                    {
-                        "catfood_id": catfood_id,
-                        "additive_id": item.get("additive_id"),
-                    }
-                    for item in additives
-                    if item.get("additive_id")
-                ]
-                if add_data:
-                    supabase_admin.table("catfood_additives").insert(add_data).execute()
+
+                if additive_data:
+                    # 判断是简单ID数组还是对象数组
+                    if isinstance(additive_data[0], (int, str)):
+                        # 简单ID数组格式
+                        add_data = [
+                            {
+                                "catfood_id": catfood_id,
+                                "additive_id": int(add_id),
+                                "order": idx,
+                            }
+                            for idx, add_id in enumerate(additive_data)
+                        ]
+                    else:
+                        # 对象数组格式
+                        add_data = [
+                            {
+                                "catfood_id": catfood_id,
+                                "additive_id": item.get("additive_id"),
+                                "order": idx,
+                            }
+                            for idx, item in enumerate(additive_data)
+                            if item.get("additive_id")
+                        ]
+
+                    if add_data:
+                        supabase_admin.table("catfood_additives").insert(
+                            add_data
+                        ).execute()
 
             if "tags" in payload:
                 supabase_admin.table("catfood_tag_relations").delete().eq(
