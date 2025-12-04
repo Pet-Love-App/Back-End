@@ -18,17 +18,32 @@ class SupabaseAuthMiddleware(MiddlewareMixin):
     def process_request(self, request):
         """处理请求，验证 token"""
 
-        # 跳过不需要认证的路径
+        # 跳过不需要认证的路径（公开接口）
         exempt_paths = [
-            "/api/auth/register/",  # 注册
-            "/api/auth/login/",  # 登录
-            "/api/auth/refresh/",  # 刷新 token
-            "/api/auth/reset-password/",  # 重置密码
+            # 认证相关（公开）
+            "/api/auth/register/",
+            "/api/auth/login/",
+            "/api/auth/refresh/",
+            "/api/auth/password/reset/",
             "/admin/",
-            "/api/catfoods/",  # 猫粮列表公开
-            "/api/search/",  # 搜索公开
-            "/api/additives/",  # 添加剂公开
-            "/api/ingredients/",  # 成分公开
+            # 猫粮相关（公开查询）
+            "/api/catfoods/",  # GET 列表和详情
+            "/api/catfood/by-barcode/",  # 条形码查询
+            # 添加剂/成分相关（公开查询）
+            "/api/additive/search-additive/",
+            "/api/additive/search-ingredient/",
+            "/api/search/ingredient/info",
+            # 论坛相关（公开查询）
+            "/api/posts/",  # GET 列表
+            # 评论相关（公开查询）
+            "/api/comments/",  # GET 列表
+            # 信誉系统（公开查询）
+            "/api/reputation/users/",  # 查看其他用户信誉
+            "/api/reputation/badges/",  # 徽章列表
+            # AI 相关（公开）
+            "/api/ai/llm/chat",  # LLM 聊天
+            # 通知创建（系统调用）
+            "/api/notifications/create/",
         ]
 
         # 检查是否是豁免路径
