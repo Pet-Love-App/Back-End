@@ -11,11 +11,12 @@ ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 # 使用国内镜像源加速
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources || true
 
-# 安装系统依赖
+# 安装系统依赖（包括 Tesseract OCR 用于文字识别）
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     curl \
+    wget \
     netcat-openbsd \
     libjpeg-dev \
     zlib1g-dev \
@@ -24,6 +25,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libgomp1 \
     default-libmysqlclient-dev \
     pkg-config \
+    tesseract-ocr \
+    tesseract-ocr-chi-sim \
+    tesseract-ocr-eng \
     && rm -rf /var/lib/apt/lists/*
 
 # 配置 pip 使用清华源
