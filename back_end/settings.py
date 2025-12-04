@@ -115,32 +115,14 @@ WSGI_APPLICATION = "back_end.wsgi.application"
 #     }
 # }
 
-# 临时使用 sqlite 以便本地开发/调试
-# 使用环境变量 USE_SQLITE=True 来切换到 SQLite
-USE_SQLITE = os.environ.get("USE_SQLITE", "False") == "True"
-
-if USE_SQLITE:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.sqlite3",
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
+# 使用 SQLite 作为 Django 的默认数据库（仅用于 Django 内置功能）
+# 实际业务数据存储在 Supabase，通过 Supabase Client 访问
+DATABASES = {
+    "default": {
+        "ENGINE": "django.db.backends.sqlite3",
+        "NAME": BASE_DIR / "db.sqlite3",
     }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": "django.db.backends.mysql",
-            "NAME": os.environ.get("DB_NAME", "backend_db"),
-            "USER": os.environ.get("DB_USER", "book14"),
-            "PASSWORD": os.environ.get("DB_PASSWORD", "Pet_love2025!"),
-            "HOST": os.environ.get("DB_HOST", "localhost"),
-            "PORT": os.environ.get("DB_PORT", "3306"),
-            "OPTIONS": {
-                "charset": "utf8mb4",
-                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
-            },
-        }
-    }
+}
 
 
 # Password validation
