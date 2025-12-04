@@ -132,10 +132,19 @@ urlpatterns = [
     # ==================== 论坛相关 ====================
     path("posts/", forum_views.list_posts, name="list_posts"),
     path("posts/create/", forum_views.create_post, name="create_post"),
+    path(
+        "posts/favorites/",
+        forum_views.get_my_favorite_posts,
+        name="get_my_favorite_posts",
+    ),
+    path("posts/<int:post_id>/", forum_views.get_post_detail, name="get_post_detail"),
     path("posts/<int:post_id>/delete/", forum_views.delete_post, name="delete_post"),
     path(
         "posts/<int:post_id>/favorite/", forum_views.favorite_post, name="favorite_post"
     ),
+    # 论坛标签
+    path("tags/", forum_views.list_tags, name="list_tags"),
+    path("tags/<int:tag_id>/", forum_views.get_tag_detail, name="get_tag_detail"),
     # ==================== 评论相关 ====================
     path("comments/", comment_views.list_comments, name="list_comments"),
     path("comments/create/", comment_views.create_comment, name="create_comment"),
@@ -249,15 +258,38 @@ urlpatterns = [
         notification_views.get_unread_count,
         name="get_unread_count",
     ),
+    # 兼容旧路径（下划线版本）
+    path(
+        "notifications/unread_count/",
+        notification_views.get_unread_count,
+        name="get_unread_count_compat",
+    ),
+    path(
+        "notifications/<int:notification_id>/",
+        notification_views.get_notification_detail,
+        name="get_notification_detail",
+    ),
     path(
         "notifications/<int:notification_id>/read/",
         notification_views.mark_as_read,
         name="mark_notification_as_read",
     ),
+    # 兼容旧路径（mark_read）
+    path(
+        "notifications/<int:notification_id>/mark_read/",
+        notification_views.mark_as_read,
+        name="mark_notification_as_read_compat",
+    ),
     path(
         "notifications/read-all/",
         notification_views.mark_all_as_read,
         name="mark_all_as_read",
+    ),
+    # 兼容旧路径（mark_all_read）
+    path(
+        "notifications/mark_all_read/",
+        notification_views.mark_all_as_read,
+        name="mark_all_as_read_compat",
     ),
     path(
         "notifications/<int:notification_id>/delete/",

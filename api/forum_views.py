@@ -48,6 +48,115 @@ def list_posts(request):
 
 
 @csrf_exempt
+@require_http_methods(["GET"])
+def get_post_detail(request, post_id):
+    """
+    获取帖子详情
+
+    GET /api/posts/<post_id>/
+    """
+    try:
+        # 查询帖子详情，关联作者和媒体
+        result = (
+            supabase_admin.table("posts")
+            .select("*, author:profiles(id, username, avatar_url), media:post_media(*)")
+            .eq("id", post_id)
+            .execute()
+        )
+
+        if not result.data:
+            return JsonResponse({"error": "Post not found"}, status=404)
+
+        post_data = result.data[0]
+
+        # 查询评论数量
+        comments_count = (
+            supabase_admin.table("comments")
+            .select("id", count="exact")
+            .eq("target_type", "post")
+            .eq("target_id", post_id)
+            .execute()
+        )
+        post_data["comments_count"] = (
+            comments_count.count if hasattr(comments_count, "count") else 0
+        )
+
+        # 查询收藏数量
+        favorites_count = (
+            supabase_admin.table("post_favorites")
+            .select("id", count="exact")
+            .eq("post_id", post_id)
+            .execute()
+        )
+        post_data["favorites_count"] = (
+            favorites_count.count if hasattr(favorites_count, "count") else 0
+        )
+
+        return JsonResponse({"post": post_data})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@require_auth
+def get_my_favorite_posts(request):
+    """
+    获取我的收藏帖子列表
+
+    GET /api/posts/favorites/
+    Query params:
+        - page: 页码（默认1）
+        - per_page: 每页数量（默认20）
+    """
+    try:
+        user = get_current_user(request)
+
+        # 安全地获取分页参数
+        page = int(request.GET.get("page") or 1)
+        per_page = int(request.GET.get("per_page") or 20)
+
+        # 计算偏移量
+        offset = (page - 1) * per_page
+
+        # 查询用户收藏的帖子
+        favorites_result = (
+            supabase_admin.table("post_favorites")
+            .select("post_id, created_at")
+            .eq("user_id", user.id)
+            .order("created_at", desc=True)
+            .range(offset, offset + per_page - 1)
+            .execute()
+        )
+
+        if not favorites_result.data:
+            return JsonResponse({"posts": [], "page": page, "per_page": per_page})
+
+        # 获取帖子 ID 列表
+        post_ids = [fav["post_id"] for fav in favorites_result.data]
+
+        # 查询帖子详情
+        posts_result = (
+            supabase_admin.table("posts")
+            .select("*, author:profiles(id, username, avatar_url), media:post_media(*)")
+            .in_("id", post_ids)
+            .execute()
+        )
+
+        # 按收藏时间排序帖子
+        posts_dict = {post["id"]: post for post in posts_result.data}
+        sorted_posts = [
+            posts_dict[post_id] for post_id in post_ids if post_id in posts_dict
+        ]
+
+        return JsonResponse({"posts": sorted_posts, "page": page, "per_page": per_page})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
 @require_http_methods(["POST"])
 @require_auth
 def create_post(request):
@@ -198,6 +307,63 @@ def favorite_post(request, post_id):
             return JsonResponse(
                 {"message": "Favorited successfully", "favorited": True}
             )
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def list_tags(request):
+    """
+    获取论坛标签列表
+
+    GET /api/tags/
+    """
+    try:
+        # TODO: 目前返回预设标签，后续可以从数据库读取或动态生成
+        tags = [
+            {"id": 1, "name": "日常分享"},
+            {"id": 2, "name": "求助"},
+            {"id": 3, "name": "评测"},
+            {"id": 4, "name": "讨论"},
+            {"id": 5, "name": "推荐"},
+            {"id": 6, "name": "疑问"},
+            {"id": 7, "name": "新手"},
+            {"id": 8, "name": "经验"},
+        ]
+        return JsonResponse(tags, safe=False)
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def get_tag_detail(request, tag_id):
+    """
+    获取单个标签详情
+
+    GET /api/tags/<tag_id>/
+    """
+    try:
+        # TODO: 目前返回预设标签，后续可以从数据库读取
+        tags = {
+            1: {"id": 1, "name": "日常分享"},
+            2: {"id": 2, "name": "求助"},
+            3: {"id": 3, "name": "评测"},
+            4: {"id": 4, "name": "讨论"},
+            5: {"id": 5, "name": "推荐"},
+            6: {"id": 6, "name": "疑问"},
+            7: {"id": 7, "name": "新手"},
+            8: {"id": 8, "name": "经验"},
+        }
+
+        tag = tags.get(tag_id)
+        if not tag:
+            return JsonResponse({"error": "Tag not found"}, status=404)
+
+        return JsonResponse(tag)
 
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=500)

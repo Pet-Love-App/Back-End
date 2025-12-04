@@ -61,6 +61,36 @@ def list_notifications(request):
 @csrf_exempt
 @require_http_methods(["GET"])
 @require_auth
+def get_notification_detail(request, notification_id):
+    """
+    获取单个通知详情
+
+    GET /api/notifications/<notification_id>/
+    """
+    try:
+        user = get_current_user(request)
+
+        # 查询通知
+        result = (
+            supabase_admin.table("notifications")
+            .select("*")
+            .eq("id", notification_id)
+            .eq("user_id", user.id)
+            .execute()
+        )
+
+        if not result.data:
+            return JsonResponse({"error": "Notification not found"}, status=404)
+
+        return JsonResponse({"notification": result.data[0]})
+
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@require_auth
 def get_unread_count(request):
     """
     获取未读通知数量
