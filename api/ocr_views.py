@@ -11,6 +11,7 @@ import pytesseract
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
+from PIL import Image
 
 from middleware.supabase_auth import require_auth
 
