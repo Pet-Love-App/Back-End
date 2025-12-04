@@ -220,16 +220,35 @@ def get_catfood_detail(request, catfood_id):
             if value is not None:
                 percent_data[key] = value
 
+        # 展平嵌套的 ingredients 和 additives 数据（参考旧项目逻辑）
+        # 后端查询返回：[{ingredient_id: 1, ingredient: {...}}, ...]
+        # 前端期望：[{id, name, type, ...}, ...]
+        ingredient_list = []
+        for item in ingredients.data:
+            if item.get("ingredient"):
+                ingredient_list.append(item["ingredient"])
+
+        additive_list = []
+        for item in additives.data:
+            if item.get("additive"):
+                additive_list.append(item["additive"])
+
+        # 展平标签数据
+        tag_list = []
+        for item in tags.data:
+            if item.get("tag"):
+                tag_list.append(item["tag"]["name"])
+
         # 组合数据
         catfood_detail = {
             **catfood_data,
-            "ingredients": ingredients.data,
-            "additives": additives.data,
-            "tags": tags.data,
+            "ingredient": ingredient_list,  # 使用扁平的成分列表
+            "additive": additive_list,  # 使用扁平的添加剂列表
+            "tags": tag_list,  # 使用标签名称列表
             "avg_rating": avg_rating,
             "rating_count": rating_count,
             "like_count": like_count,
-            "percentData": percent_data,  # ✅ 添加组装的 percentData
+            "percentData": percent_data,
         }
 
         return JsonResponse({"catfood": catfood_detail})
@@ -767,6 +786,21 @@ def get_user_favorites(request):
                     catfood["createdAt"] = catfood.pop("created_at")
                 if "updated_at" in catfood:
                     catfood["updatedAt"] = catfood.pop("updated_at")
+
+                # 组装 percentData（只包含非 null 的字段）
+                percent_data = {}
+                fields_to_check = {
+                    "crude_protein": catfood.get("crude_protein"),
+                    "crude_fat": catfood.get("crude_fat"),
+                    "carbohydrates": catfood.get("carbohydrates"),
+                    "crude_fiber": catfood.get("crude_fiber"),
+                    "crude_ash": catfood.get("crude_ash"),
+                    "others": catfood.get("others"),
+                }
+                for key, value in fields_to_check.items():
+                    if value is not None:
+                        percent_data[key] = value
+                catfood["percentData"] = percent_data
 
         return JsonResponse({"favorites": favorites_data})
 
