@@ -146,8 +146,11 @@ def llm_chat(request):
             "  - identified_nutrients（array，可选，识别到的营养成分或营养标签的名称列表，元素为字符串）。\n"
             "  - safety（string，必填，大约50个汉字的针对猫粮的简要安全性分析，重点关注添加剂）；\n"
             "  - nutrient（string，必填，大约300个汉字的针对猫粮的简要营养分析）；\n"
-            "  - percentage（boolean/null，可选，如果你能分析出以下各成分占比，请在此处填True，否则填False。尽可能分析！）；\n"
-            '  - percent_data（dict,以营养成分英文名作为字段名，例如"carbohydrates"，值为number,各相应成分百分比。如果能分析占比，percentage=True。如果percentage=True，一定要有一个字段是others，代表其他成分的百分比。所有含量之和应为100）\n'
+            "  - percentage（boolean/null，如果配料表中包含营养成分的百分比信息（如粗蛋白≥27%、粗脂肪≥10%等），即使是保证值（≥或≤），也应该填True并基于这些数据估算percent_data。只有完全没有任何百分比信息时才填False）；\n"
+            '  - percent_data（dict，以营养成分英文名作为字段名，例如"crude_protein"（粗蛋白）、"crude_fat"（粗脂肪）、"carbohydrates"（碳水化合物）、"crude_fiber"（粗纤维）、"crude_ash"（粗灰分）等，值为number，表示各成分的百分比。\n'
+            "    - 如果配料表提供了保证值（如粗蛋白≥27%），请基于这些值进行合理估算（例如粗蛋白可以估为27-30%之间的值）。\n"
+            "    - 如果percentage=True，必须包含至少3个营养成分字段，并确保所有百分比之和为100。如果已知成分总和小于100，必须添加'others'字段表示其他成分。\n"
+            "    - 字段名使用标准英文名称：crude_protein（粗蛋白）、crude_fat（粗脂肪）、crude_fiber（粗纤维）、crude_ash（粗灰分）、carbohydrates（碳水化合物）、others（其他）等）\n"
             "- 数值字段无法判断时返回 null；数组字段无法判断或无识别结果时返回空数组。\n"
             "- 禁止输出推理过程或步骤说明，只保留结论性短句或最终的 JSON 字段内容。\n"
         )
@@ -575,6 +578,22 @@ def get_report(request, catfood_id):
         report_data, error = safe_single(report_result, "Report not found")
         if error:
             return JsonResponse({"error": error}, status=404)
+
+        # 处理嵌套的 catfood 数据，提取 catfood_name
+        if report_data.get("catfood") and isinstance(report_data["catfood"], dict):
+            catfood = report_data["catfood"]
+
+            # 提取 catfood_name（前端需要）
+            report_data["catfood_name"] = catfood.get("name", "")
+
+            # 移除嵌套的 catfood 对象（前端不需要）
+            report_data.pop("catfood", None)
+
+        # percent_data 应该直接从 ai_analysis_reports 表中读取，不需要重新组装
+        # 它是一个 JSONField，可以包含任意的营养成分字段（动态的）
+        # 确保 percent_data 存在且为字典类型
+        if "percent_data" not in report_data or report_data["percent_data"] is None:
+            report_data["percent_data"] = {}
 
         return JsonResponse({"report": report_data})
 
