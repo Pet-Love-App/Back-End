@@ -9,7 +9,7 @@ from django.views.decorators.http import require_http_methods
 
 from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
-from utils import parse_json_body, safe_single
+from utils import convert_keys_to_camel, parse_json_body, safe_single
 
 
 @csrf_exempt
@@ -40,6 +40,10 @@ def list_comments(request):
 
             try:
                 user = get_current_user(request)
+                if not user:
+                    return JsonResponse(
+                        {"error": "Authentication required"}, status=401
+                    )
             except Exception:
                 return JsonResponse({"error": "Invalid token"}, status=401)
 
@@ -59,7 +63,7 @@ def list_comments(request):
                 .execute()
             )
 
-            # 为每个评论查询回复数量（可选）
+            # 为每个评论查询回复数量
             for comment in result.data:
                 replies = (
                     supabase_admin.table("comments")
@@ -69,11 +73,23 @@ def list_comments(request):
                 )
                 comment["reply_count"] = len(replies.data) if replies.data else 0
 
+            # 统一转换所有字段名为 camelCase
+            results = convert_keys_to_camel(result.data)
+
+            # 特殊处理：avatar_url 应该映射为 avatar 而不是 avatarUrl
+            for comment in results:
+                if (
+                    "author" in comment
+                    and comment["author"]
+                    and "avatarUrl" in comment["author"]
+                ):
+                    comment["author"]["avatar"] = comment["author"].pop("avatarUrl")
+
             return JsonResponse(
                 {
-                    "results": result.data,
-                    "count": len(result.data),
-                    "next": len(result.data) == page_size,
+                    "results": results,
+                    "count": len(results),
+                    "next": len(results) == page_size,
                     "previous": page > 1,
                 }
             )

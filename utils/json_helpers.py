@@ -1,6 +1,56 @@
 import json
 
 
+def snake_to_camel(snake_str):
+    """
+    将 snake_case 字符串转换为 camelCase
+
+    Args:
+        snake_str: snake_case 格式的字符串
+
+    Returns:
+        camelCase 格式的字符串
+
+    Example:
+        >>> snake_to_camel("user_name")
+        "userName"
+        >>> snake_to_camel("created_at")
+        "createdAt"
+    """
+    components = snake_str.split("_")
+    return components[0] + "".join(x.title() for x in components[1:])
+
+
+def convert_keys_to_camel(data):
+    """
+    递归地将字典或列表中的所有 snake_case 键转换为 camelCase
+
+    Args:
+        data: 字典、列表或其他数据类型
+
+    Returns:
+        转换后的数据（保持原始数据结构）
+
+    Example:
+        >>> convert_keys_to_camel({"user_name": "John", "created_at": "2024-01-01"})
+        {"userName": "John", "createdAt": "2024-01-01"}
+        >>> convert_keys_to_camel([{"user_id": 1}, {"user_id": 2}])
+        [{"userId": 1}, {"userId": 2}]
+    """
+    if isinstance(data, dict):
+        new_dict = {}
+        for key, value in data.items():
+            # 转换键名
+            new_key = snake_to_camel(key) if "_" in key else key
+            # 递归处理值
+            new_dict[new_key] = convert_keys_to_camel(value)
+        return new_dict
+    elif isinstance(data, list):
+        return [convert_keys_to_camel(item) for item in data]
+    else:
+        return data
+
+
 def parse_json_body(request, default=None):
     """
     安全地解析请求体中的 JSON 数据

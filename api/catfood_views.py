@@ -10,7 +10,13 @@ from django.views.decorators.http import require_http_methods
 from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
 from services.supabase_storage import storage_service
-from utils import parse_json_body, parse_json_field, require_admin, safe_single
+from utils import (
+    convert_keys_to_camel,
+    parse_json_body,
+    parse_json_field,
+    require_admin,
+    safe_single,
+)
 
 # ==================== 猫粮 CRUD ====================
 
@@ -807,29 +813,20 @@ def get_user_favorites(request):
             .execute()
         )
 
-        # 转换字段名：将嵌套的 catfood 对象中的 image_url 转换为 imageUrl
-        favorites_data = result.data
+        # 统一转换所有字段名为 camelCase
+        favorites_data = convert_keys_to_camel(result.data)
+
+        # 组装 percentData（只包含非 null 的字段）
         for favorite in favorites_data:
             if favorite.get("catfood") and isinstance(favorite["catfood"], dict):
                 catfood = favorite["catfood"]
-                # 转换字段名（蛇形 -> 驼峰）
-                if "image_url" in catfood:
-                    catfood["imageUrl"] = catfood.pop("image_url")
-                if "count_num" in catfood:
-                    catfood["countNum"] = catfood.pop("count_num")
-                if "created_at" in catfood:
-                    catfood["createdAt"] = catfood.pop("created_at")
-                if "updated_at" in catfood:
-                    catfood["updatedAt"] = catfood.pop("updated_at")
-
-                # 组装 percentData（只包含非 null 的字段）
                 percent_data = {}
                 fields_to_check = {
-                    "crude_protein": catfood.get("crude_protein"),
-                    "crude_fat": catfood.get("crude_fat"),
+                    "crudeProtein": catfood.get("crudeProtein"),
+                    "crudeFat": catfood.get("crudeFat"),
                     "carbohydrates": catfood.get("carbohydrates"),
-                    "crude_fiber": catfood.get("crude_fiber"),
-                    "crude_ash": catfood.get("crude_ash"),
+                    "crudeFiber": catfood.get("crudeFiber"),
+                    "crudeAsh": catfood.get("crudeAsh"),
                     "others": catfood.get("others"),
                 }
                 for key, value in fields_to_check.items():
