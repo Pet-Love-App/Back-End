@@ -45,7 +45,8 @@ class Settings(BaseSettings):
         description="Django 密钥",
     )
     DEBUG: bool = Field(default=True, description="调试模式")
-    ALLOWED_HOSTS: list[str] = Field(
+    # 允许字符串或列表输入，避免空字符串触发 json 解析错误
+    ALLOWED_HOSTS: list[str] | str = Field(
         default_factory=lambda: DEFAULT_ALLOWED_HOSTS.copy(), description="允许的主机"
     )
 
