@@ -8,6 +8,8 @@ import logging
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 
 from middleware.supabase_auth import require_auth
 
@@ -17,6 +19,36 @@ from ..utils import error_response, success_response, validation_error_response
 logger = logging.getLogger(__name__)
 
 
+@swagger_auto_schema(
+    method="post",
+    operation_description="📷 OCR 图片文字识别\n\n识别猫粮配料表图片中的文字内容。\n\n**需要认证**: Bearer Token\n**速率限制**: 20次/小时",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=["image"],
+        properties={
+            "image": openapi.Schema(
+                type=openapi.TYPE_STRING, description="图片 URL 或 Base64 编码"
+            ),
+        },
+        example={"image": "https://example.com/catfood.jpg"},
+    ),
+    responses={
+        200: openapi.Response(
+            description="识别成功",
+            examples={
+                "application/json": {
+                    "ok": True,
+                    "data": {"text": "鸡肉粉、鱼肉粉、维生素D...", "confidence": 0.95},
+                }
+            },
+        ),
+        400: "请求参数错误",
+        401: "未认证",
+        429: "速率限制：超过 20次/小时",
+        503: "OCR 服务未配置",
+    },
+    tags=["📷 OCR 识别服务"],
+)
 @csrf_exempt
 @require_http_methods(["POST"])
 @require_auth

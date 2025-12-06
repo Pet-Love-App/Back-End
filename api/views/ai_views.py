@@ -8,6 +8,8 @@ import logging
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 
 from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
@@ -18,29 +20,46 @@ from ..utils import error_response, success_response, validation_error_response
 logger = logging.getLogger(__name__)
 
 
+@swagger_auto_schema(
+    method="post",
+    operation_description="🤖 LLM 聊天接口 - 分析猫粮成分\n\n使用 AI 模型分析猫粮配料表，识别添加剂、成分并提供营养分析和健康建议。\n\n**速率限制**: 10次/小时",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=["ingredients"],
+        properties={
+            "ingredients": openapi.Schema(
+                type=openapi.TYPE_STRING,
+                description="猫粮配料表文本，多个成分用逗号分隔",
+            ),
+        },
+        example={"ingredients": "鸡肉粉, 鱼肉粉, 维生素D, 牛磺酸"},
+    ),
+    responses={
+        200: openapi.Response(
+            description="分析成功",
+            examples={
+                "application/json": {
+                    "ok": True,
+                    "data": {
+                        "additive": ["维生素D", "牛磺酸"],
+                        "ingredient": ["鸡肉粉", "鱼肉粉"],
+                        "nutrient": "营养分析详述...",
+                        "health_advice": "健康建议内容...",
+                    },
+                }
+            },
+        ),
+        400: "请求参数错误",
+        429: "速率限制：超过 10次/小时",
+        503: "AI 服务未配置",
+    },
+    tags=["🤖 AI 报告服务"],
+)
 @csrf_exempt
 @require_http_methods(["POST"])
 @ratelimit(key="ip", rate="10/h", method="POST", block=True)
 def llm_chat(request):
-    """
-    LLM 聊天接口 - 分析猫粮成分
-
-    POST /api/ai/llm/chat/
-    Body: {
-        "ingredients": "鸡肉粉, 鱼肉粉, 维生素D"
-    }
-
-    返回格式:
-    {
-        "ok": true,
-        "data": {
-            "additive": ["维生素D"],
-            "ingredient": ["鸡肉粉", "鱼肉粉"],
-            "nutrient": "营养分析详述",
-            "health_advice": "健康建议内容"
-        }
-    }
-    """
+    """LLM 聊天接口 - 分析猫粮成分"""
     try:
         # 检查配置
         if not ai_service.is_configured():

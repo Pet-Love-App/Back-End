@@ -9,6 +9,8 @@ import logging
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
+from drf_yasg import openapi
+from drf_yasg.utils import swagger_auto_schema
 
 from ..services.search_service import search_service
 from ..utils import error_response, success_response, validation_error_response
@@ -16,6 +18,57 @@ from ..utils import error_response, success_response, validation_error_response
 logger = logging.getLogger(__name__)
 
 
+@swagger_auto_schema(
+    method="post",
+    operation_description="🔍 搜索成分信息 (POST)\n\n从百度百科搜索添加剂或营养成分的详细信息。\n\n**速率限制**: 30次/小时",
+    request_body=openapi.Schema(
+        type=openapi.TYPE_OBJECT,
+        required=["ingredient"],
+        properties={
+            "ingredient": openapi.Schema(
+                type=openapi.TYPE_STRING, description="要搜索的成分名称"
+            ),
+        },
+        example={"ingredient": "维生素D"},
+    ),
+    responses={
+        200: openapi.Response(
+            description="搜索成功",
+            examples={
+                "application/json": {
+                    "ok": True,
+                    "data": {
+                        "summary": "维生素D是一种脂溶性维生素...",
+                        "source": "baidu_baike",
+                    },
+                }
+            },
+        ),
+        400: "请求参数错误",
+        429: "速率限制：超过 30次/小时",
+        503: "搜索服务未配置",
+    },
+    tags=["🔍 搜索服务"],
+)
+@swagger_auto_schema(
+    method="get",
+    operation_description="🔍 搜索成分信息 (GET)\n\n从百度百科搜索添加剂或营养成分的详细信息。\n\n**速率限制**: 30次/小时",
+    manual_parameters=[
+        openapi.Parameter(
+            "ingredient",
+            openapi.IN_QUERY,
+            description="要搜索的成分名称",
+            type=openapi.TYPE_STRING,
+            required=True,
+        )
+    ],
+    responses={
+        200: "搜索成功",
+        400: "请求参数错误",
+        429: "速率限制：超过 30次/小时",
+    },
+    tags=["🔍 搜索服务"],
+)
 @csrf_exempt
 @require_http_methods(["POST", "GET"])
 @ratelimit(key="ip", rate="30/h", block=True)
