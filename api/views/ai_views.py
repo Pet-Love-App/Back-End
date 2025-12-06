@@ -155,7 +155,7 @@ def save_report(request):
 
         # 准备数据
         report_data = {
-            "user_id": user["id"],
+            "user_id": user.id,
             "catfood_id": catfood_id,
             "catfood_name": body.get("catfood_name", ""),
             "ingredients_text": body.get("ingredients_text", ""),
@@ -212,7 +212,7 @@ def get_report(request, catfood_id):
         response = (
             supabase_admin.table("ai_reports")
             .select("*")
-            .eq("user_id", user["id"])
+            .eq("user_id", user.id)
             .eq("catfood_id", catfood_id)
             .execute()
         )
@@ -249,7 +249,7 @@ def check_report_exists(request, catfood_id):
         response = (
             supabase_admin.table("ai_reports")
             .select("id")
-            .eq("user_id", user["id"])
+            .eq("user_id", user.id)
             .eq("catfood_id", catfood_id)
             .execute()
         )
@@ -284,7 +284,7 @@ def delete_report(request, catfood_id):
         response = (
             supabase_admin.table("ai_reports")
             .delete()
-            .eq("user_id", user["id"])
+            .eq("user_id", user.id)
             .eq("catfood_id", catfood_id)
             .execute()
         )
@@ -318,7 +318,7 @@ def get_favorite_reports(request):
         response = (
             supabase_admin.table("favorite_ai_reports")
             .select("*, ai_reports(*)")
-            .eq("user_id", user["id"])
+            .eq("user_id", user.id)
             .execute()
         )
 
@@ -367,7 +367,7 @@ def toggle_favorite_report(request):
         check_response = (
             supabase_admin.table("favorite_ai_reports")
             .select("id")
-            .eq("user_id", user["id"])
+            .eq("user_id", user.id)
             .eq("report_id", report_id)
             .execute()
         )
@@ -384,7 +384,7 @@ def toggle_favorite_report(request):
                 supabase_admin.table("favorite_ai_reports")
                 .insert(
                     {
-                        "user_id": user["id"],
+                        "user_id": user.id,
                         "report_id": report_id,
                     }
                 )
@@ -416,7 +416,7 @@ def delete_favorite_report(request, favorite_id):
 
         # 从 Supabase 删除
         supabase_admin.table("favorite_ai_reports").delete().eq("id", favorite_id).eq(
-            "user_id", user["id"]
+            "user_id", user.id
         ).execute()
 
         return success_response(message="删除成功")
@@ -447,7 +447,7 @@ def check_favorite_report(request, report_id):
         response = (
             supabase_admin.table("favorite_ai_reports")
             .select("id")
-            .eq("user_id", user["id"])
+            .eq("user_id", user.id)
             .eq("report_id", report_id)
             .execute()
         )
