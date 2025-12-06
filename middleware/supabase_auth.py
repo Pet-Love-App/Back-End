@@ -61,6 +61,11 @@ class SupabaseAuthMiddleware(MiddlewareMixin):
         if request.method == "GET":
             for pattern in public_get_patterns:
                 if re.match(pattern, request.path):
+                    # 特殊处理：评论接口带 my=true 参数时需要认证
+                    if request.path.startswith("/api/comments/") and request.GET.get(
+                        "my"
+                    ):
+                        break  # 不跳过，继续进行认证检查
                     return None
 
         # 获取 Authorization header
