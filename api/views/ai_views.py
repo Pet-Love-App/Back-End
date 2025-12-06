@@ -317,7 +317,7 @@ def get_favorite_reports(request):
         # 从 Supabase 查询
         response = (
             supabase_admin.table("favorite_reports")
-            .select("*, ai_reports(*)")
+            .select("*, ai_analysis_reports(*)")
             .eq("user_id", user.id)
             .execute()
         )
@@ -374,7 +374,7 @@ def toggle_favorite_report(request):
 
         if check_response.data:
             # 已收藏，取消收藏
-            supabase_admin.table("favorite_ai_reports").delete().eq(
+            supabase_admin.table("favorite_reports").delete().eq(
                 "id", check_response.data[0]["id"]
             ).execute()
             return success_response(data={"favorited": False}, message="取消收藏成功")
