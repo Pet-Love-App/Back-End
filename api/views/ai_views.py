@@ -316,7 +316,7 @@ def get_favorite_reports(request):
 
         # 从 Supabase 查询
         response = (
-            supabase_admin.table("favorite_ai_reports")
+            supabase_admin.table("favorite_reports")
             .select("*, ai_reports(*)")
             .eq("user_id", user.id)
             .execute()
@@ -365,7 +365,7 @@ def toggle_favorite_report(request):
 
         # 检查是否已收藏
         check_response = (
-            supabase_admin.table("favorite_ai_reports")
+            supabase_admin.table("favorite_reports")
             .select("id")
             .eq("user_id", user.id)
             .eq("report_id", report_id)
@@ -381,7 +381,7 @@ def toggle_favorite_report(request):
         else:
             # 未收藏，添加收藏
             insert_response = (
-                supabase_admin.table("favorite_ai_reports")
+                supabase_admin.table("favorite_reports")
                 .insert(
                     {
                         "user_id": user.id,
@@ -415,7 +415,7 @@ def delete_favorite_report(request, favorite_id):
             return error_response(message="未授权", code="unauthorized", status=401)
 
         # 从 Supabase 删除
-        supabase_admin.table("favorite_ai_reports").delete().eq("id", favorite_id).eq(
+        supabase_admin.table("favorite_reports").delete().eq("id", favorite_id).eq(
             "user_id", user.id
         ).execute()
 
@@ -445,7 +445,7 @@ def check_favorite_report(request, report_id):
 
         # 从 Supabase 查询
         response = (
-            supabase_admin.table("favorite_ai_reports")
+            supabase_admin.table("favorite_reports")
             .select("id")
             .eq("user_id", user.id)
             .eq("report_id", report_id)
