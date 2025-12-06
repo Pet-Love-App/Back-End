@@ -5,11 +5,12 @@ OCR 服务
 
 import base64
 import logging
-import os
 import re
 from typing import Optional, Tuple
 
 import requests
+
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,13 +20,9 @@ class OCRService:
 
     def __init__(self):
         """初始化 OCR 服务"""
-        # 阿里云 OCR 配置
-        self.appcode = os.getenv(
-            "ALIYUN_OCR_APPCODE", "4128453694f84dedab4c2f873999cad4"
-        )
-        self.api_url = os.getenv(
-            "ALIYUN_OCR_URL", "https://gjbsb.market.alicloudapi.com/ocrservice/advanced"
-        )
+        # 从统一配置获取
+        self.appcode = settings.ALIYUN_OCR_APPCODE
+        self.api_url = settings.ALIYUN_OCR_URL
         self.timeout = 30
         self.max_file_size = 10 * 1024 * 1024  # 10MB
         self.allowed_content_types = [
@@ -38,7 +35,7 @@ class OCRService:
 
     def is_configured(self) -> bool:
         """检查 API 是否已配置"""
-        return bool(self.appcode and self.api_url)
+        return settings.is_ocr_configured()
 
     def recognize(
         self, image_bytes: bytes, content_type: str

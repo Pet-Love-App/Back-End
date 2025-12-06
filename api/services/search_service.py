@@ -4,11 +4,12 @@
 """
 
 import logging
-import os
 import urllib.parse
 from typing import Any, Optional, Tuple
 
 import requests
+
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -18,18 +19,13 @@ class SearchService:
 
     def __init__(self):
         """初始化搜索服务"""
-        # 兼容多种环境变量名
-        self.api_key = (
-            os.getenv("BAIDU_APPBUILDER_KEY")
-            or os.getenv("BAIDU_APPBUILDER_API_KEY")
-            or os.getenv("BAIDU_API_KEY")
-            or ""
-        )
+        # 从统一配置获取
+        self.api_key = settings.BAIDU_API_KEY
         self.timeout = 20
 
     def is_configured(self) -> bool:
         """检查 API 是否已配置"""
-        return bool(self.api_key)
+        return settings.is_search_configured()
 
     def search_ingredient(
         self, ingredient: str, timeout: Optional[int] = None

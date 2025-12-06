@@ -5,11 +5,12 @@ AI 服务
 
 import json
 import logging
-import os
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
 import requests
+
+from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -19,25 +20,15 @@ class AIService:
 
     def __init__(self):
         """初始化 AI 服务"""
-        # LLM API 配置（兼容 OpenAI 格式）
-        self.api_key = (
-            os.getenv("LLM_API_KEY")
-            or os.getenv("OPENAI_API_KEY")
-            or "sk-b4C9_BWHAkjKhYVwq0VD1g"
-        )
-        self.api_url = (
-            os.getenv("LLM_API_URL")
-            or os.getenv("OPENAI_API_BASE")
-            or "https://llmapi.paratera.com/v1/chat/completions"
-        )
-        self.model = (
-            os.getenv("LLM_MODEL") or os.getenv("OPENAI_MODEL") or "DeepSeek-V3.2-Exp"
-        )
+        # 从统一配置获取
+        self.api_key = settings.LLM_API_KEY
+        self.api_url = settings.LLM_API_URL
+        self.model = settings.LLM_MODEL
         self.timeout = 120
 
     def is_configured(self) -> bool:
         """检查 API 是否已配置"""
-        return bool(self.api_key and self.api_url and self.model)
+        return settings.is_ai_configured()
 
     def analyze_ingredients(
         self, ingredients: str, timeout: Optional[int] = None
