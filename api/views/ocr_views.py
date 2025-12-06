@@ -6,10 +6,10 @@ OCR 识别相关 API
 import logging
 
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from rest_framework.decorators import api_view
 
 from middleware.supabase_auth import require_auth
 
@@ -49,8 +49,8 @@ logger = logging.getLogger(__name__)
     },
     tags=["📷 OCR 识别服务"],
 )
+@api_view(["POST"])
 @csrf_exempt
-@require_http_methods(["POST"])
 @require_auth
 @ratelimit(key="user_or_ip", rate="20/h", method="POST", block=True)
 def ocr_recognize(request):

@@ -10,6 +10,7 @@ from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from rest_framework.decorators import api_view
 
 from config.supabase_client import supabase_admin
 from middleware.supabase_auth import get_current_user, require_auth
@@ -55,8 +56,8 @@ logger = logging.getLogger(__name__)
     },
     tags=["🤖 AI 报告服务"],
 )
+@api_view(["POST"])
 @csrf_exempt
-@require_http_methods(["POST"])
 @ratelimit(key="ip", rate="10/h", method="POST", block=True)
 def llm_chat(request):
     """LLM 聊天接口 - 分析猫粮成分"""

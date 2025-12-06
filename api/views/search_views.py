@@ -7,10 +7,10 @@ import json
 import logging
 
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_http_methods
 from django_ratelimit.decorators import ratelimit
 from drf_yasg import openapi
 from drf_yasg.utils import swagger_auto_schema
+from rest_framework.decorators import api_view
 
 from ..services.search_service import search_service
 from ..utils import error_response, success_response, validation_error_response
@@ -69,8 +69,8 @@ logger = logging.getLogger(__name__)
     },
     tags=["🔍 搜索服务"],
 )
+@api_view(["POST", "GET"])
 @csrf_exempt
-@require_http_methods(["POST", "GET"])
 @ratelimit(key="ip", rate="30/h", block=True)
 def search_ingredient_info(request):
     """
