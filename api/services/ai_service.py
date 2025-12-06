@@ -77,7 +77,7 @@ class AIService:
 
     def _build_prompt(self, ingredients: str) -> str:
         """构建 LLM 提示词"""
-        return f"""你是一个专业的猫粮成分分析专家。请分析以下猫粮成分列表：
+        return f"""你是一个专业的猫粮成分分析专家。请分析以下猫粮配料表：
 
 {ingredients}
 
@@ -85,17 +85,41 @@ class AIService:
 
 1. **识别添加剂**：从成分列表中识别所有的添加剂（如维生素、矿物质、防腐剂等），输出为数组。
 2. **识别配料**：从成分列表中识别所有的配料（如肉类、谷物等，不含添加剂），输出为数组。
-3. **营养分析**：对整体营养成分进行评价，包括优点和缺点。
-4. **健康建议**：根据成分给出健康建议。
+3. **产品标签**：根据成分特点给出2-4个标签（如"高蛋白"、"无谷物"、"成猫粮"等）。
+4. **安全性分析**：评估成分的安全性（约50字）。
+5. **营养分析**：对整体营养成分进行详细评价（约300字），包括优点和缺点。
+6. **百分比数据提取**：
+   - 仔细检查配料表中是否明确标注了营养成分的百分比（如"粗蛋白≥30%"、"脂肪15%"、"水分≤10%"等）
+   - 如果有，将所有带百分比的营养成分提取到 percent_data 中，字段名使用英文下划线命名
+   - 字段名根据实际营养成分动态生成，不限于固定字段（如：crude_protein、crude_fat、moisture、crude_fiber、crude_ash、carbohydrates、calcium、phosphorus、taurine 等）
+   - 如果没有明确标注百分比，则 percentage 为 false，percent_data 为空对象
 
 请严格按照以下 JSON 格式返回，不要添加任何额外的说明文字：
 
 {{
   "additive": ["维生素A", "维生素D3"],
   "ingredient": ["鸡肉粉", "鱼肉"],
-  "nutrient": "营养分析内容",
-  "health_advice": "健康建议内容"
-}}"""
+  "tags": ["高蛋白", "成猫粮"],
+  "safety": "安全性分析内容（约50字）",
+  "nutrient": "营养分析内容（约300字）",
+  "percentage": true,
+  "percent_data": {{
+    "crude_protein": 30.0,
+    "crude_fat": 15.0,
+    "moisture": 10.0,
+    "crude_fiber": 5.0,
+    "crude_ash": 8.0,
+    "calcium": 1.2,
+    "phosphorus": 1.0
+  }}
+}}
+
+重要提示：
+- percentage: 仅当配料表中明确标注了营养成分百分比时才为 true
+- percent_data: 字段名和字段数量完全根据配料表中实际出现的营养成分动态生成，有什么加什么
+- 字段名统一使用英文下划线命名（如 crude_protein、crude_fat、crude_fiber、crude_ash、moisture、carbohydrates、calcium、phosphorus、taurine、omega_3、omega_6 等）
+- 百分比值为数字类型，不带百分号
+- 如果配料表中没有任何百分比标注，percentage 为 false，percent_data 为空对象 {{}}"""
 
     def _call_llm_api(
         self, prompt: str, timeout: int
@@ -177,14 +201,32 @@ class AIService:
                 result = json.loads(content)
 
             # 确保必需字段存在
-            required_fields = ["additive", "ingredient", "nutrient", "health_advice"]
-            for field in required_fields:
+            required_fields = {
+                "additive": [],
+                "ingredient": [],
+                "tags": [],
+                "safety": "",
+                "nutrient": "",
+                "percentage": False,
+                "percent_data": {},
+            }
+
+            for field, default_value in required_fields.items():
                 if field not in result:
-                    result[field] = [] if field in ["additive", "ingredient"] else ""
+                    result[field] = default_value
 
             # 规范化列表字段
-            result["additive"] = self._to_str_list(result["additive"])
-            result["ingredient"] = self._to_str_list(result["ingredient"])
+            result["additive"] = self._to_str_list(result.get("additive", []))
+            result["ingredient"] = self._to_str_list(result.get("ingredient", []))
+            result["tags"] = self._to_str_list(result.get("tags", []))
+
+            # 确保 percentage 是布尔值
+            if not isinstance(result.get("percentage"), bool):
+                result["percentage"] = False
+
+            # 确保 percent_data 是字典
+            if not isinstance(result.get("percent_data"), dict):
+                result["percent_data"] = {}
 
             return result
 

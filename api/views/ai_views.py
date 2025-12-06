@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 @swagger_auto_schema(
     method="post",
-    operation_description="🤖 LLM 聊天接口 - 分析猫粮成分\n\n使用 AI 模型分析猫粮配料表，识别添加剂、成分并提供营养分析和健康建议。\n\n**速率限制**: 10次/小时",
+    operation_description="🤖 LLM 聊天接口 - 分析猫粮成分\n\n使用 AI 模型分析猫粮配料表，识别添加剂、成分并提供营养分析。\n\n**功能特性**：\n- 自动识别添加剂和配料\n- 提取产品标签\n- 安全性和营养分析\n- 动态提取营养成分百分比数据（percent_data 字段根据实际配料表内容动态生成）\n\n**速率限制**: 10次/小时",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         required=["ingredients"],
@@ -44,8 +44,18 @@ logger = logging.getLogger(__name__)
                     "data": {
                         "additive": ["维生素D", "牛磺酸"],
                         "ingredient": ["鸡肉粉", "鱼肉粉"],
+                        "tags": ["高蛋白", "成猫粮"],
+                        "safety": "成分安全，无有害添加剂...",
                         "nutrient": "营养分析详述...",
-                        "health_advice": "健康建议内容...",
+                        "percentage": True,
+                        "percent_data": {
+                            "crude_protein": 30.0,
+                            "crude_fat": 15.0,
+                            "carbohydrates": 40.0,
+                            "crude_fiber": 5.0,
+                            "crude_ash": 5.0,
+                            "others": 5.0,
+                        },
                     },
                 }
             },
@@ -148,10 +158,16 @@ def save_report(request):
             "user_id": user["id"],
             "catfood_id": catfood_id,
             "catfood_name": body.get("catfood_name", ""),
-            "additive": body.get("additive", []),
-            "ingredient": body.get("ingredient", []),
+            "ingredients_text": body.get("ingredients_text", ""),
+            "tags": body.get("tags", []),
+            "additives": body.get("additive", []),  # 前端可能用 additive 或 additives
+            "ingredients": body.get(
+                "ingredient", []
+            ),  # 前端可能用 ingredient 或 ingredients
+            "safety": body.get("safety", ""),
             "nutrient": body.get("nutrient", ""),
-            "health_advice": body.get("health_advice", ""),
+            "percentage": body.get("percentage", False),
+            "percent_data": body.get("percent_data", {}),
         }
 
         # 保存到 Supabase
