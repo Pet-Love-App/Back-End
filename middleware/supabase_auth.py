@@ -17,20 +17,56 @@ class SupabaseAuthMiddleware(MiddlewareMixin):
 
     def process_request(self, request):
         """处理请求，验证 token"""
+        import re
 
-        # 跳过不需要认证的路径
-        exempt_paths = [
-            "/api/auth/",
+        # 完全公开的路径（任何方法都不需要认证）
+        public_paths = [
+            # 认证相关
+            "/api/auth/register/",
+            "/api/auth/login/",
+            "/api/auth/refresh/",
+            "/api/auth/password/reset/",
             "/admin/",
-            "/api/catfoods/",  # 猫粮列表公开
-            "/api/search/",  # 搜索公开
-            "/api/additives/",  # 添加剂公开
-            "/api/ingredients/",  # 成分公开
+            # 添加剂/成分相关
+            "/api/additive/search-additive/",
+            "/api/additive/search-ingredient/",
+            "/api/search/ingredient/info",
+            # 条形码查询
+            "/api/catfood/by-barcode/",
+            # AI LLM 聊天
+            "/api/ai/llm/chat",
+            # 通知创建（系统调用）
+            "/api/notifications/create/",
         ]
 
-        # 检查是否是豁免路径
-        if any(request.path.startswith(path) for path in exempt_paths):
-            return None
+        # 仅 GET 方法公开的路径（使用正则表达式）
+        public_get_patterns = [
+            r"^/api/catfoods/$",  # 猫粮列表
+            r"^/api/catfoods/\d+/$",  # 猫粮详情
+            r"^/api/catfoods/\d+/ratings/$",  # 猫粮评分列表
+            r"^/api/catfood/likes/count/\d+/$",  # 猫粮点赞数
+            r"^/api/catfood/\d+/comments/$",  # 猫粮评论列表
+            r"^/api/posts/$",  # 论坛列表
+            r"^/api/comments/$",  # 评论列表
+            r"^/api/reputation/users/[\w-]+/$",  # 查看用户信誉
+            r"^/api/reputation/badges/$",  # 徽章列表
+        ]
+
+        # 检查完全公开的路径
+        for path in public_paths:
+            if request.path.startswith(path):
+                return None
+
+        # 检查仅 GET 公开的路径
+        if request.method == "GET":
+            for pattern in public_get_patterns:
+                if re.match(pattern, request.path):
+                    # 特殊处理：评论接口带 my=true 参数时需要认证
+                    if request.path.startswith("/api/comments/") and request.GET.get(
+                        "my"
+                    ):
+                        break  # 不跳过，继续进行认证检查
+                    return None
 
         # 获取 Authorization header
         auth_header = request.META.get("HTTP_AUTHORIZATION", "")
@@ -44,7 +80,9 @@ class SupabaseAuthMiddleware(MiddlewareMixin):
         try:
             scheme, token = auth_header.split()
             if scheme.lower() != "bearer":
-                return JsonResponse({"error": "Invalid authorization scheme"}, status=401)
+                return JsonResponse(
+                    {"error": "Invalid authorization scheme"}, status=401
+                )
         except ValueError:
             return JsonResponse({"error": "Invalid authorization header"}, status=401)
 
@@ -84,44 +122,6 @@ def require_auth(view_func):
         user = get_current_user(request)
         if not user:
             return JsonResponse({"error": "Authentication required"}, status=401)
-        return view_func(request, *args, **kwargs)
-
-    return wrapper
-
-
-def require_admin(view_func):
-    """
-    装饰器：要求用户必须是管理员
-
-    Usage:
-        @require_admin
-        def admin_view(request):
-            ...
-    """
-
-    def wrapper(request, *args, **kwargs):
-        user = get_current_user(request)
-        if not user:
-            return JsonResponse({"error": "Authentication required"}, status=401)
-
-        # 检查是否是管理员
-        try:
-            from config.supabase_client import supabase_admin
-
-            profile = (
-                supabase_admin.table("profiles")
-                .select("is_admin")
-                .eq("id", user.id)
-                .single()
-                .execute()
-            )
-
-            if not profile.data or not profile.data.get("is_admin"):
-                return JsonResponse({"error": "Admin access required"}, status=403)
-
-        except Exception as e:
-            return JsonResponse({"error": f"Failed to verify admin status: {str(e)}"}, status=500)
-
         return view_func(request, *args, **kwargs)
 
     return wrapper

@@ -16,12 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     g++ \
     curl \
+    wget \
     netcat-openbsd \
     libjpeg-dev \
     zlib1g-dev \
-    libgl1 \
-    libglib2.0-0 \
-    libgomp1 \
     default-libmysqlclient-dev \
     pkg-config \
     && rm -rf /var/lib/apt/lists/*
@@ -51,10 +49,6 @@ RUN chmod +x /entrypoint.sh
 
 # 暴露端口
 EXPOSE 8000
-
-# 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/api/auth/login/ || exit 1
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["gunicorn", "back_end.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "4", "--timeout", "120"]

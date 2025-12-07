@@ -24,22 +24,25 @@ try:
 except ImportError:
     pass  # 如果没有安装 python-dotenv，跳过
 
-# Supabase 配置
-SUPABASE_URL = os.getenv("SUPABASE_URL", "")
-SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY", "")
-SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
+# 导入统一配置
+from config.settings import settings as app_settings
+
+# Supabase 配置（向后兼容）
+SUPABASE_URL = app_settings.SUPABASE_URL
+SUPABASE_ANON_KEY = app_settings.SUPABASE_ANON_KEY
+SUPABASE_SERVICE_KEY = app_settings.SUPABASE_SERVICE_KEY
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-8l#yd#zg_xlp4x08h9rtmow_0j%3=2))5t1^h_75bjhp7ez1s!"
+SECRET_KEY = app_settings.SECRET_KEY
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = app_settings.DEBUG
 
-ALLOWED_HOSTS = ["82.157.255.92", "localhost", "127.0.0.1"]
+ALLOWED_HOSTS = app_settings.ALLOWED_HOSTS
 
 
 # Application definition
@@ -53,6 +56,9 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    # API 文档
+    "rest_framework",
+    "drf_yasg",
 ]
 
 MIDDLEWARE = [
@@ -60,7 +66,7 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",  # CORS 中间件
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
+    # "django.middleware.csrf.CsrfViewMiddleware",  # 禁用 CSRF（API 使用 JWT 认证）
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
@@ -79,6 +85,32 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+}
+
+# Swagger 文档配置
+SWAGGER_SETTINGS = {
+    "SECURITY_DEFINITIONS": {
+        "Bearer": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header",
+        }
+    },
+    "USE_SESSION_AUTH": False,
+    "JSON_EDITOR": True,
+    "SUPPORTED_SUBMIT_METHODS": ["get", "post", "put", "delete", "patch"],
+}
+
+# 速率限制配置
+RATELIMIT_ENABLE = True  # 启用速率限制
+RATELIMIT_USE_CACHE = "default"  # 使用默认缓存
+
+# 缓存配置（用于速率限制）
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "ratelimit-cache",
+    }
 }
 
 ROOT_URLCONF = "back_end.urls"
@@ -142,6 +174,8 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
 ]
+
+# 日志配置
 
 
 # Internationalization
