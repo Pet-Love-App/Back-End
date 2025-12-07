@@ -1,449 +1,271 @@
-# Pet Love 后端
+# 🐾 Pet Love - 宠物爱好者社区（后端）
 
-基于 Django + Supabase 的宠物社区后端服务。
+<div align="center">
 
-## 项目概述
+**基于 Django + Supabase 打造的高性能宠物社区后端服务**
 
-Pet Love 是一个功能完整的宠物社区平台，提供宠物管理、猫粮评价、论坛互动、AI 分析等功能。
+[![Django](https://img.shields.io/badge/Django-5.2-092E20?style=flat&logo=django)](https://www.djangoproject.com/)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=flat&logo=python)](https://www.python.org/)
+[![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E?style=flat&logo=supabase)](https://supabase.com/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker)](https://www.docker.com/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**技术栈：**
-- **后端框架**: Django 5.2
-- **数据库**: Supabase (PostgreSQL)
-- **认证**: Supabase Auth
-- **文件存储**: Supabase Storage
-- **AI 服务**: OpenAI API
-- **OCR**: 阿里云高精版OCR
-- **外部 API**: Baidu AppBuilder
+[功能特性](#-功能特性) • [快速开始](#-快速开始) • [API 文档](#-api-文档) • [数据库架构](#-数据库架构) • [部署指南](#-部署指南)
 
----
-
-## 项目结构
-
-```
-pet-love-back_end/
-├── api/                          # API 视图层
-│   ├── auth_views.py             # 认证相关
-│   ├── pet_views.py              # 宠物管理
-│   ├── catfood_views.py          # 猫粮管理
-│   ├── forum_views.py            # 论坛功能
-│   ├── comment_views.py          # 评论功能
-│   ├── ai_report_views.py        # AI 报告
-│   ├── additive_views.py         # 添加剂/成分
-│   ├── ocr_views.py              # OCR 识别
-│   ├── reputation_views.py       # 信誉系统
-│   ├── notification_views.py     # 通知系统
-│   ├── tests.py                  # API 测试
-│   └── urls.py                   # API 路由
-│
-├── services/                     # 业务逻辑服务
-│   ├── supabase_storage.py       # 文件存储服务
-│   └── reputation_service.py     # 信誉系统服务
-│
-├── utils/                        # 工具函数
-│   ├── ocr_utils.py              # OCR 工具
-│   └── reputation_utils.py       # 信誉工具
-│
-├── middleware/                   # Django 中间件
-│   └── supabase_auth.py          # Supabase 认证中间件
-│
-├── config/                       # 配置文件
-│   └── supabase_client.py        # Supabase 客户端
-│
-├── back_end/                     # Django 项目配置
-│   ├── settings.py               # 项目设置
-│   ├── urls.py                   # URL 配置
-│   └── wsgi.py                   # WSGI 配置
-│
-├── scripts/                      # 数据库脚本
-│   ├── supabase_migration.sql    # 数据库迁移脚本
-│   ├── add_database_indexes.sql  # 索引优化脚本
-│   ├── configure_rls_policies.sql # RLS 策略脚本
-│   ├── import_to_supabase.py     # 数据导入脚本
-│   ├── export_mysql_data.py      # 数据导出脚本
-│   └── setup_supabase_buckets.py # Storage 桶设置脚本
-│
-├── docs/                         # 文档
-│   ├── API_DOCUMENTATION.md      # API 文档
-│   └── PROJECT_STRUCTURE_REFACTOR.md # 项目结构说明
-│
-├── data_export/                  # 导出的数据（备份）
-│
-├── requirements.txt              # Python 依赖
-├── manage.py                     # Django 管理脚本
-├── Dockerfile                    # Docker 配置
-├── docker-compose.yml            # Docker Compose 配置
-└── README.md                     # 项目说明
-```
+</div>
 
 ---
 
-## 快速开始
+## 📖 项目简介
 
-### 1. 环境要求
+Pet Love 后端服务是一个功能完整、高性能的 RESTful API 系统，为移动端和 Web 端提供统一的数据接口。采用 Django + Supabase 架构，集成 AI 分析、OCR 识别、社区互动等核心功能。
 
-- Python 3.10+
-- Supabase 账号
-- OpenAI API Key（可选，用于 AI 分析）
-- Baidu AppBuilder API Key（可选，用于成分查询）
+### ✨ 核心特性
 
-### 2. 安装依赖
+- 🔐 **完整的认证系统** - 基于 Supabase Auth + JWT Token
+- 🤖 **AI 智能分析** - 集成 OpenAI GPT 的猫粮配料表深度分析
+- 📸 **OCR 文字识别** - 阿里云高精版 OCR，识别准确率 95%+
+- 🔬 **成分数据库** - 完整的添加剂和营养成分数据库
+- 💬 **社区系统** - 论坛、评论、点赞、收藏功能
+- ⭐ **信誉系统** - 用户贡献度评分、等级、徽章
+- 🔔 **实时通知** - 基于 Supabase Realtime 的实时通知推送
+- 📊 **数据统计** - 用户行为统计、热度排行榜
+- 🔒 **安全防护** - Row Level Security (RLS)、速率限制、SQL 注入防护
+- 🚀 **高性能** - 数据库索引优化、查询优化、缓存策略
+
+---
+
+## 🏗️ 技术架构
+
+### 核心技术栈
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| [Django](https://www.djangoproject.com/) | 5.2+ | Web 框架 |
+| [Python](https://www.python.org/) | 3.10+ | 编程语言 |
+| [Supabase](https://supabase.com/) | 2.0+ | 后端服务（数据库、认证、存储） |
+| [PostgreSQL](https://www.postgresql.org/) | 15+ | 关系型数据库 |
+| [Gunicorn](https://gunicorn.org/) | 21.2+ | WSGI 服务器 |
+| [Docker](https://www.docker.com/) | 20.10+ | 容器化部署 |
+
+### AI & 外部服务
+
+| 服务 | 用途 |
+|------|------|
+| [OpenAI API](https://platform.openai.com/) | GPT 模型，猫粮配料表智能分析 |
+| [阿里云 OCR](https://market.aliyun.com/) | 高精版文字识别 |
+| [Baidu AppBuilder](https://console.bce.baidu.com/) | 成分百科信息查询 |
+
+### 功能模块
+
+- 🔐 **认证模块** - 注册、登录、令牌刷新、邮箱验证
+- 🐾 **宠物管理** - CRUD、图片上传、多宠物关联
+- 🍖 **猫粮管理** - CRUD、评分、收藏、营养成分分析
+- 💬 **论坛系统** - 帖子发布、编辑、删除、点赞
+- 💭 **评论系统** - 多级评论、回复、点赞
+- 🤖 **AI 报告** - 配料表分析、营养成分占比、安全性评估
+- 🔬 **成分数据库** - 添加剂、营养成分查询
+- 📸 **OCR 识别** - 图片文字提取、配料表识别
+- ⭐ **信誉系统** - 积分、等级、徽章、贡献度排行
+- 🔔 **通知系统** - 评论通知、点赞通知、系统通知
+
+---
+
+## 🚀 快速开始
+
+### 📋 前置要求
+
+在开始之前，请确保你的开发环境已安装：
+
+- **Python** >= 3.10 ([下载](https://www.python.org/downloads/))
+- **pip** >= 21.0
+- **Supabase 账号** ([注册](https://supabase.com/))
+- **Docker** (可选，用于容器化部署)
+
+### 📥 安装步骤
 
 ```bash
-# 克隆项目
-git clone <repository-url>
+# 1. 克隆项目
+git clone https://github.com/Pet-Love-App/Back-End.git
 cd pet-love-back_end
 
-# 创建虚拟环境
+# 2. 创建虚拟环境
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 安装依赖
+# 激活虚拟环境
+# Windows:
+venv\Scripts\activate
+# macOS/Linux:
+source venv/bin/activate
+
+# 3. 安装依赖
 pip install -r requirements.txt
 ```
 
-### 3. 配置环境变量
+### ⚙️ 环境配置
 
 创建 `.env` 文件：
 
 ```env
-# Supabase 配置
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your_anon_key
-SUPABASE_SERVICE_KEY=your_service_role_key
+# ==================== Django 配置 ====================
+SECRET_KEY=your_django_secret_key_here
+DEBUG=True
+ALLOWED_HOSTS=localhost,127.0.0.1,0.0.0.0
 
-# OpenAI 配置（用于 AI 分析）
-OPENAI_API_KEY=your_openai_api_key
+# ==================== Supabase 配置 ====================
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_KEY=your_supabase_service_role_key
+
+# ==================== OpenAI 配置（AI 分析） ====================
+OPENAI_API_KEY=sk-your-openai-api-key
 OPENAI_API_BASE=https://api.openai.com/v1
 OPENAI_MODEL=gpt-3.5-turbo
 
-# 阿里云OCR配置（用于图像文字识别）
+# ==================== 阿里云 OCR 配置 ====================
 ALIYUN_OCR_APPCODE=your_aliyun_ocr_appcode
 ALIYUN_OCR_URL=https://gjbsb.market.alicloudapi.com/ocrservice/advanced
 
-# Baidu AppBuilder 配置（用于成分查询）
+# ==================== Baidu AppBuilder 配置 ====================
 BAIDU_APPBUILDER_API_KEY=your_baidu_api_key
 
-# Django 配置
-SECRET_KEY=your_django_secret_key
-DEBUG=True
-ALLOWED_HOSTS=localhost,127.0.0.1
+# ==================== CORS 配置（可选） ====================
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:19006
 ```
 
-### 4. 数据库设置
+## 📂 项目结构
 
-在 Supabase SQL Editor 中依次执行以下脚本：
-
-```bash
-# 1. 创建表结构
-scripts/supabase_migration.sql
-
-# 2. 添加性能优化索引
-scripts/add_database_indexes.sql
-
-# 3. 配置 RLS 安全策略（可选）
-scripts/configure_rls_policies.sql
+```
+pet-love-back_end/
+├── api/                              # API 视图层
+│   ├── auth_views.py                 # 🔐 认证相关（登录、注册、登出）
+│   ├── pet_views.py                  # 🐾 宠物管理（CRUD）
+│   ├── catfood_views.py              # 🍖 猫粮管理（CRUD、评分、收藏）
+│   ├── forum_views.py                # 💬 论坛功能（帖子、点赞）
+│   ├── comment_views.py              # 💭 评论功能（发布、回复、删除）
+│   ├── ai_report_views.py            # 🤖 AI 报告（生成、保存、查询）
+│   ├── additive_views.py             # 🔬 添加剂/成分查询
+│   ├── ocr_views.py                  # 📸 OCR 识别
+│   ├── search_views.py               # 🔍 搜索功能（百度百科）
+│   ├── reputation_views.py           # ⭐ 信誉系统（积分、等级、徽章）
+│   ├── notification_views.py         # 🔔 通知系统
+│   ├── tests.py                      # 🧪 API 测试
+│   └── urls.py                       # 🛣️ API 路由配置
+│
+├── services/                         # 业务逻辑服务层
+│   ├── ocr_service.py                # OCR 识别服务（阿里云 API 封装）
+│   ├── ai_service.py                 # AI 分析服务（OpenAI API 封装）
+│   ├── search_service.py             # 搜索服务（百度百科 API 封装）
+│   ├── supabase_storage.py           # 文件存储服务（Supabase Storage）
+│   └── reputation_service.py         # 信誉系统服务（积分计算、等级升级）
+│
+├── middleware/                       # Django 中间件
+│   └── supabase_auth.py              # Supabase JWT 认证中间件
+│
+├── config/                           # 配置文件
+│   └── supabase_client.py            # Supabase 客户端初始化
+│
+├── back_end/                         # Django 项目配置
+│   ├── settings.py                   # 项目设置（数据库、中间件、CORS等）
+│   ├── urls.py                       # 根 URL 配置
+│   └── wsgi.py                       # WSGI 应用入口
+│
+├── scripts/                          # 数据库脚本和工具
+│   ├── supabase_migration.sql        # 📊 数据库表结构迁移脚本
+│   ├── add_database_indexes.sql      # 🚀 性能优化索引脚本
+│   ├── configure_rls_policies.sql    # 🔒 RLS 安全策略脚本
+│   ├── import_to_supabase.py         # 🔄 数据导入脚本
+│   ├── export_mysql_data.py          # 📤 数据导出脚本（从旧系统迁移）
+│   └── setup_supabase_buckets.py     # 🗂️ Storage 桶设置脚本
+│
+├── docs/                             # 文档
+│   ├── API_DOCUMENTATION.md          # 📖 API 接口文档
+│   └── PROJECT_STRUCTURE_REFACTOR.md # 🏗️ 项目结构重构说明
+│
+├── data_export/                      # 数据导出目录（备份）
+│   └── (导出的 JSON 数据文件)
+│
+├── .env                              # ⚙️ 环境变量配置（不提交到 Git）
+├── .env.example                      # 📝 环境变量示例文件
+├── requirements.txt                  # 📦 Python 依赖
+├── manage.py                         # 🔧 Django 管理脚本
+├── Dockerfile                        # 🐳 Docker 镜像构建文件
+├── docker-compose.yml                # 🐳 Docker Compose 编排文件
+└── README.md                         # 📄 项目说明文档
 ```
 
-### 5. 设置 Supabase Storage
+### 主要 API 端点
 
-```bash
-# 创建存储桶
-python scripts/setup_supabase_buckets.py
-```
-
-### 6. 运行开发服务器
-
-```bash
-# 运行 Django 服务器
-python manage.py runserver
-
-# 服务器启动在 http://127.0.0.1:8000
-```
+| 模块 | 端点 | 说明 |
+|------|------|------|
+| 🔐 **认证** | `/api/auth/` | 注册、登录、登出、令牌刷新 |
+| 🐾 **宠物** | `/api/pets/` | 宠物 CRUD、图片上传 |
+| 🍖 **猫粮** | `/api/catfoods/` | 猫粮 CRUD、评分、收藏、搜索 |
+| 💬 **论坛** | `/api/posts/` | 帖子发布、编辑、删除、点赞 |
+| 💭 **评论** | `/api/comments/` | 评论发布、回复、删除、点赞 |
+| 🤖 **AI 报告** | `/api/ai/` | 生成报告、保存报告、查询报告 |
+| 🔬 **成分** | `/api/additive/` | 添加剂/成分查询 |
+| 📸 **OCR** | `/api/ocr/` | 图片文字识别 |
+| 🔍 **搜索** | `/api/search/` | 百度百科搜索 |
+| ⭐ **信誉** | `/api/reputation/` | 用户积分、等级、徽章 |
+| 🔔 **通知** | `/api/notifications/` | 通知列表、标记已读 |
 
 ---
 
-## API 文档
+## 🗄️ 数据库架构
 
-完整的 API 文档请查看：[docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md)
-
-**API 基础 URL**: `http://your-domain.com/api/`
-
-**主要功能模块：**
-- 🔐 认证系统 (`/api/auth/`)
-- 🐾 宠物管理 (`/api/pets/`)
-- 🍖 猫粮管理 (`/api/catfoods/`)
-- 💬 论坛系统 (`/api/posts/`)
-- 💭 评论系统 (`/api/comments/`)
-- 🤖 AI 报告 (`/api/ai/`)
-- 🔬 添加剂/成分 (`/api/additive/`)
-- 📸 OCR 识别 (`/api/ocr/`)
-- ⭐ 信誉系统 (`/api/reputation/`)
-- 🔔 通知系统 (`/api/notifications/`)
-
----
-
-## 数据库架构
-
-### 核心表
+### 核心数据表
 
 | 表名 | 说明 | 关键字段 |
 |------|------|----------|
-| `profiles` | 用户配置 | username, avatar_url, bio |
-| `pets` | 宠物信息 | name, species, breed, age |
-| `catfoods` | 猫粮基础信息 | name, brand, score, 营养成分 |
-| `catfood_ratings` | 猫粮评分 | catfood_id, user_id, score |
+| `profiles` | 用户资料 | username, avatar_url, bio, is_admin |
+| `pets` | 宠物信息 | name, species, breed, age, owner_id |
+| `catfoods` | 猫粮基础信息 | name, brand, score, 营养成分占比 |
+| `catfood_ratings` | 猫粮评分 | catfood_id, user_id, score, review |
 | `catfood_favorites` | 猫粮收藏 | user_id, catfood_id |
-| `posts` | 论坛帖子 | author_id, content |
-| `comments` | 评论 | target_type, target_id, content |
-| `ai_analysis_reports` | AI 分析报告 | catfood_id, ingredients_text |
-| `ingredients` | 营养成分 | name, type, label |
-| `additives` | 添加剂 | name, en_name, type |
-| `reputation_summaries` | 用户信誉 | user_id, score, level |
-| `badges` | 徽章定义 | code, name, rule |
-| `notifications` | 通知 | recipient_id, verb |
+| `posts` | 论坛帖子 | author_id, content, likes_count |
+| `comments` | 评论 | target_type, target_id, content, parent_id |
+| `ai_analysis_reports` | AI 分析报告 | catfood_id, ingredients_text, analysis |
+| `ingredients` | 营养成分库 | name, type, label, description |
+| `additives` | 添加剂库 | name, en_name, type, safety_level |
+| `reputation_summaries` | 用户信誉 | user_id, score, level, badges |
+| `badges` | 徽章定义 | code, name, icon, rule |
+| `notifications` | 通知 | recipient_id, actor_id, verb, target |
 
 ### 数据库特性
 
-- ✅ **Row Level Security (RLS)**: 数据安全保护
-- ✅ **自动触发器**: 自动更新时间戳、评分统计
-- ✅ **全文搜索**: GIN 索引支持高效搜索
-- ✅ **复合索引**: 优化关联查询性能
-- ✅ **唯一约束**: 防止重复数据
+- ✅ **Row Level Security (RLS)** - 数据隔离，防止越权访问
+- ✅ **自动触发器** - 自动更新时间戳、统计数据
+- ✅ **全文搜索 (GIN 索引)** - 高效的中文全文搜索
+- ✅ **复合索引** - 优化关联查询性能
+- ✅ **唯一约束** - 防止重复数据（用户名、邮箱等）
+- ✅ **外键约束** - 保证数据一致性
+- ✅ **级联删除** - 自动清理关联数据
 
----
+### ER 图（简化版）
 
-## 部署
+```
+profiles (用户)
+    ↓
+    ├─ pets (宠物)
+    ├─ catfood_ratings (评分)
+    ├─ catfood_favorites (收藏)
+    ├─ posts (帖子)
+    ├─ comments (评论)
+    └─ reputation_summaries (信誉)
 
-### Docker 部署
-
-```bash
-# 构建镜像
-docker build -t pet-love-backend .
-
-# 运行容器
-docker run -d -p 8000:8000 --env-file .env pet-love-backend
+catfoods (猫粮)
+    ↓
+    ├─ ai_analysis_reports (AI 报告)
+    ├─ catfood_ratings (评分)
+    └─ catfood_favorites (收藏)
 ```
 
-### Docker Compose 部署
+## ⚡ 性能优化
 
-```bash
-# 启动所有服务
-docker-compose up -d
+### 已实施的优化
 
-# 查看日志
-docker-compose logs -f
-
-# 停止服务
-docker-compose down
-```
-
-### 生产环境配置
-
-1. 设置 `DEBUG=False`
-2. 配置 `ALLOWED_HOSTS`
-3. 使用环境变量管理敏感信息
-4. 配置 HTTPS
-5. 设置 CORS 白名单
-6. 启用 Supabase RLS 策略
-
----
-
-## 开发指南
-
-### 添加新的 API 端点
-
-1. 在 `api/` 目录下创建或编辑视图文件
-2. 在 `api/urls.py` 中添加路由
-3. 使用 `@require_auth` 装饰器保护需要认证的接口
-4. 使用 `supabase_admin` 客户端操作数据库
-
-**示例：**
-
-```python
-# api/example_views.py
-from django.http import JsonResponse
-from django.views.decorators.http import require_http_methods
-from middleware.supabase_auth import require_auth
-from config.supabase_client import supabase_admin
-
-@require_http_methods(["GET"])
-@require_auth
-def get_example(request):
-    user_id = request.user_id
-    
-    # 查询数据
-    response = supabase_admin.table("table_name").select("*").eq("user_id", user_id).execute()
-    
-    return JsonResponse({"data": response.data})
-```
-
-### 运行测试
-
-```bash
-# 运行所有测试
-python manage.py test
-
-# 运行特定模块测试
-python manage.py test api.tests
-```
-
-### 代码规范
-
-- 使用 Black 格式化代码
-- 遵循 PEP 8 规范
-- 添加必要的注释和文档字符串
-- API 返回统一的 JSON 格式
-
----
-
-## 常见问题
-
-### Q1: 如何导入旧数据？
-
-```bash
-# 1. 导出旧数据库数据
-python scripts/export_mysql_data.py
-
-# 2. 导入到 Supabase
-python scripts/import_to_supabase.py
-```
-
-### Q2: 如何重置数据库？
-
-在 Supabase SQL Editor 中：
-
-```sql
--- 删除所有表
-DROP SCHEMA public CASCADE;
-CREATE SCHEMA public;
-
--- 重新执行迁移脚本
--- 运行 scripts/supabase_migration.sql
-```
-
-### Q3: 如何添加管理员用户？
-
-在 Supabase SQL Editor 中：
-
-```sql
-UPDATE profiles 
-SET is_admin = true 
-WHERE email = 'admin@example.com';
-```
-
-### Q4: OCR 识别不准确怎么办？
-
-- 确保图片清晰度足够
-- 检查 `ALIYUN_OCR_APPCODE` 是否正确配置
-- 使用更高分辨率的图片
-- 验证阿里云OCR服务配额是否充足
-
-### Q5: AI 分析返回错误？
-
-- 检查 `OPENAI_API_KEY` 是否正确配置
-- 确认 API 余额充足
-- 查看 `api/ai_report_views.py` 中的错误日志
-
----
-
-## 性能优化
-
-### 数据库优化
-
-- ✅ 已添加全文搜索索引 (GIN)
-- ✅ 已添加复合索引
-- ✅ 已添加唯一约束索引
-- ✅ 已配置查询优化
-
-### 缓存策略
-
-建议在生产环境中添加：
-- Redis 缓存热点数据
-- CDN 缓存静态文件
-- Supabase Edge Functions 缓存
-
-### 监控建议
-
-- 使用 Supabase Dashboard 监控数据库性能
-- 配置慢查询日志
-- 监控 API 响应时间
-- 设置错误告警
-
----
-
-## 安全说明
-
-### 已实施的安全措施
-
-- ✅ Supabase Row Level Security (RLS)
-- ✅ JWT Token 认证
-- ✅ CORS 配置
-- ✅ SQL 注入防护（使用 Supabase 客户端）
-- ✅ 文件上传验证
-- ✅ 敏感信息环境变量管理
-
-### 安全建议
-
-- 定期更新依赖包
-- 使用强密码策略
-- 启用 HTTPS
-- 定期备份数据库
-- 监控异常访问
-
----
-
-## 贡献指南
-
-欢迎贡献代码！请遵循以下步骤：
-
-1. Fork 本仓库
-2. 创建特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 创建 Pull Request
-
----
-
-## 更新日志
-
-### v2.0.0 (2024-12-04)
-
-**重大更新：**
-- ✅ 完全迁移到 Supabase
-- ✅ 移除 Django REST Framework
-- ✅ 重构项目结构（方案 A）
-- ✅ 实现所有核心 API
-- ✅ 添加 API 兼容层
-- ✅ 优化数据库索引
-- ✅ 配置 RLS 安全策略
-- ✅ 集成 PaddleOCR
-- ✅ 集成 OpenAI API
-- ✅ 集成 Baidu AppBuilder API
-
-**删除内容：**
-- ❌ Django ORM 模型
-- ❌ Django REST Framework
-- ❌ Djoser 认证
-- ❌ 旧的 app 文件夹结构
-
----
-
-## 许可证
-
-[MIT License](LICENSE)
-
----
-
-## 联系方式
-
-如有问题或建议，请提交 Issue 或 Pull Request。
-
----
-
-## 致谢
-
-感谢以下开源项目：
-- Django
-- Supabase
-- PaddleOCR
-- OpenAI
+- ✅ **数据库索引** - 全文搜索索引、复合索引、唯一索引
+- ✅ **查询优化** - 减少 N+1 查询、使用 select 指定字段
+- ✅ **连接池** - Supabase 内置连接池
+- ✅ **CDN 加速** - Supabase Storage 自带 CDN
