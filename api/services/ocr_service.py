@@ -4,6 +4,7 @@ OCR 服务
 """
 
 import base64
+import json
 import logging
 import re
 from typing import Optional, Tuple
@@ -133,16 +134,47 @@ class OCRService:
             识别的文本，或 None
         """
         try:
-            # 检查响应状态
-            ret = response_data.get("ret", [])
-            if not ret:
-                logger.error("OCR 响应中没有 ret 字段")
+            # 检查是否有错误
+            if "error_code" in response_data or "error_msg" in response_data:
+                error_code = response_data.get("error_code", "unknown")
+                error_msg = response_data.get("error_msg", "未知错误")
+                logger.error(f"阿里云 OCR 返回错误: {error_code} - {error_msg}")
+                return None
+
+            # 尝试获取识别结果（支持两种格式）
+            # 格式1: ret 字段（旧版API）
+            # 格式2: prism_wordsInfo 字段（新版API）
+            words_info = []
+
+            ret = response_data.get("ret")
+            if isinstance(ret, list):
+                words_info.extend(ret)
+            elif ret:
+                logger.warning("ret 字段存在但格式异常，已忽略")
+
+            prism_words_info = response_data.get("prism_wordsInfo")
+            if isinstance(prism_words_info, list):
+                words_info.extend(prism_words_info)
+            elif prism_words_info:
+                logger.warning("prism_wordsInfo 字段存在但格式异常，已忽略")
+
+            if not words_info:
+                logger.error(
+                    "OCR 响应中没有识别结果，完整响应: "
+                    f"{json.dumps(response_data, ensure_ascii=False)[:300]}"
+                )
                 return None
 
             # 提取所有识别到的文本行
             text_lines = []
-            for item in ret:
-                word = item.get("word", "").strip()
+            for item in words_info:
+                # 同时兼容旧字段 word、新字段 text/content
+                if not isinstance(item, dict):
+                    continue
+
+                word = (
+                    item.get("word") or item.get("text") or item.get("content") or ""
+                ).strip()
                 if word:
                     text_lines.append(word)
 

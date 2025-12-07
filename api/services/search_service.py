@@ -106,6 +106,12 @@ class SearchService:
 
             response = requests.get(url, headers=headers, timeout=timeout)
 
+            # 添加调试日志
+            logger.info(f"百度 API 响应状态码: {response.status_code}")
+            logger.info(
+                f"百度 API 响应内容: {response.text[:500] if response.text else 'empty'}"
+            )
+
             try:
                 return response.status_code, response.json()
             except Exception:
