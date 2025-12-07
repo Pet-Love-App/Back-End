@@ -1,27 +1,32 @@
-# Django 核心
 Django>=5.2.0,<6.0.0
 django-cors-headers>=4.3.0,<5.0.0
 python-dotenv>=1.0.0,<2.0.0
 
-# Supabase 相关（使用兼容版本）
+# Supabase
 supabase>=2.0.0,<3.0.0
 
 # 图片处理
 Pillow>=11.3.0,<12.0.0
-opencv-contrib-python>=4.10.0,<5.0.0
-numpy>=2.0.2,<3.0.0
 
-# OCR 相关（Google Tesseract OCR）
-pytesseract>=0.3.10,<1.0.0
-
-# AI 相关
+# AI 服务
 openai>=1.59.6,<2.0.0
 
 # HTTP 请求
 requests>=2.32.5,<3.0.0
 
-# WSGI 服务器
+# 生产服务器
 gunicorn>=21.2.0,<22.0.0
 
-# 其他工具
+# 日期处理
 python-dateutil>=2.9.0,<3.0.0
+
+# API 文档 (Swagger)
+drf-yasg>=1.21.7,<2.0.0
+djangorestframework>=3.14.0,<4.0.0
+
+# 速率限制
+django-ratelimit>=4.1.0,<5.0.0
+
+# 配置管理
+pydantic>=2.0.0,<3.0.0
+pydantic-settings>=2.0.0,<3.0.0
