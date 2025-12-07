@@ -153,11 +153,9 @@ def save_report(request):
         if not catfood_id:
             return validation_error_response({"catfood_id": "猫粮 ID 不能为空"})
 
-        # 准备数据
+        # 准备数据（ai_analysis_reports 表字段）
         report_data = {
-            "user_id": user.id,
             "catfood_id": catfood_id,
-            "catfood_name": body.get("catfood_name", ""),
             "ingredients_text": body.get("ingredients_text", ""),
             "tags": body.get("tags", []),
             "additives": body.get("additive", []),  # 前端可能用 additive 或 additives
@@ -170,10 +168,10 @@ def save_report(request):
             "percent_data": body.get("percent_data", {}),
         }
 
-        # 保存到 Supabase
+        # 保存到 Supabase（ai_analysis_reports 表按 catfood_id 唯一存储）
         response = (
-            supabase_admin.table("ai_reports")
-            .upsert(report_data, on_conflict="user_id,catfood_id")
+            supabase_admin.table("ai_analysis_reports")
+            .upsert(report_data, on_conflict="catfood_id")
             .execute()
         )
 
@@ -208,11 +206,10 @@ def get_report(request, catfood_id):
         if not user:
             return error_response(message="未授权", code="unauthorized", status=401)
 
-        # 从 Supabase 查询
+        # 从 Supabase 查询（按 catfood_id 查询，报告是全局的）
         response = (
-            supabase_admin.table("ai_reports")
+            supabase_admin.table("ai_analysis_reports")
             .select("*")
-            .eq("user_id", user.id)
             .eq("catfood_id", catfood_id)
             .execute()
         )
@@ -245,11 +242,10 @@ def check_report_exists(request, catfood_id):
         if not user:
             return error_response(message="未授权", code="unauthorized", status=401)
 
-        # 从 Supabase 查询
+        # 从 Supabase 查询（按 catfood_id 查询，报告是全局的）
         response = (
-            supabase_admin.table("ai_reports")
+            supabase_admin.table("ai_analysis_reports")
             .select("id")
-            .eq("user_id", user.id)
             .eq("catfood_id", catfood_id)
             .execute()
         )
@@ -280,11 +276,10 @@ def delete_report(request, catfood_id):
         if not user:
             return error_response(message="未授权", code="unauthorized", status=401)
 
-        # 从 Supabase 删除
+        # 从 Supabase 删除（按 catfood_id 删除，报告是全局的）
         response = (
-            supabase_admin.table("ai_reports")
+            supabase_admin.table("ai_analysis_reports")
             .delete()
-            .eq("user_id", user.id)
             .eq("catfood_id", catfood_id)
             .execute()
         )
