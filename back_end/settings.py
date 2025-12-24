@@ -42,7 +42,8 @@ SECRET_KEY = app_settings.SECRET_KEY
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = app_settings.DEBUG
 
-ALLOWED_HOSTS = app_settings.ALLOWED_HOSTS
+# 确保允许所有主机（调试用）
+ALLOWED_HOSTS = ["*"]  # 临时允许所有，调试完成后改回 app_settings.ALLOWED_HOSTS
 
 
 # Application definition
