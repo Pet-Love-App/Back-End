@@ -3,7 +3,9 @@ OCR 识别相关 API
 使用阿里云高精版OCR进行文字识别
 """
 
+import base64
 import logging
+import re
 
 from django.views.decorators.csrf import csrf_exempt
 from django_ratelimit.decorators import ratelimit
@@ -19,18 +21,81 @@ from ..utils import error_response, success_response, validation_error_response
 logger = logging.getLogger(__name__)
 
 
+def extract_image_from_request(request):
+    """
+    从请求中提取图片数据
+    支持两种格式：
+    1. multipart/form-data 文件上传
+    2. JSON body 中的 base64 图片
+
+    Returns:
+        tuple: (image_bytes, content_type, error_message)
+    """
+    # 方式 1: multipart/form-data 文件上传
+    if "image" in request.FILES:
+        image_file = request.FILES["image"]
+        image_bytes = image_file.read()
+        content_type = image_file.content_type or "image/jpeg"
+        logger.info(f"OCR 收到文件上传: {image_file.name}, size={len(image_bytes)}")
+        return image_bytes, content_type, None
+
+    # 方式 2: JSON body 中的 base64 图片
+    if request.data and "image" in request.data:
+        image_data = request.data["image"]
+
+        # 检查是否是 base64 数据
+        if isinstance(image_data, str):
+            # 处理 data URL 格式: data:image/jpeg;base64,xxxxx
+            if image_data.startswith("data:"):
+                match = re.match(r"data:([^;]+);base64,(.+)", image_data)
+                if match:
+                    content_type = match.group(1)
+                    base64_data = match.group(2)
+                    try:
+                        image_bytes = base64.b64decode(base64_data)
+                        logger.info(
+                            f"OCR 收到 base64 图片 (data URL): size={len(image_bytes)}"
+                        )
+                        return image_bytes, content_type, None
+                    except Exception as e:
+                        logger.error(f"Base64 解码失败: {e}")
+                        return None, None, "Base64 解码失败"
+
+            # 纯 base64 字符串
+            else:
+                try:
+                    image_bytes = base64.b64decode(image_data)
+                    logger.info(f"OCR 收到纯 base64 图片: size={len(image_bytes)}")
+                    return image_bytes, "image/jpeg", None
+                except Exception as e:
+                    logger.error(f"Base64 解码失败: {e}")
+                    return None, None, "Base64 解码失败"
+
+    return None, None, "请上传图片文件或提供 base64 编码的图片"
+
+
 @swagger_auto_schema(
     method="post",
-    operation_description="📷 OCR 图片文字识别\n\n识别猫粮配料表图片中的文字内容。\n\n**需要认证**: Bearer Token\n**速率限制**: 20次/小时",
+    operation_description="""📷 OCR 图片文字识别
+
+识别猫粮配料表图片中的文字内容。
+
+**支持两种上传方式:**
+1. `multipart/form-data` - 直接上传图片文件
+2. `application/json` - 发送 base64 编码的图片
+
+**需要认证**: Bearer Token
+**速率限制**: 20次/小时""",
     request_body=openapi.Schema(
         type=openapi.TYPE_OBJECT,
         required=["image"],
         properties={
             "image": openapi.Schema(
-                type=openapi.TYPE_STRING, description="图片 URL 或 Base64 编码"
+                type=openapi.TYPE_STRING,
+                description="图片 base64 编码 (支持 data URL 格式)",
             ),
         },
-        example={"image": "https://example.com/catfood.jpg"},
+        example={"image": "data:image/jpeg;base64,/9j/4AAQSkZJRg..."},
     ),
     responses={
         200: openapi.Response(
@@ -38,7 +103,7 @@ logger = logging.getLogger(__name__)
             examples={
                 "application/json": {
                     "ok": True,
-                    "data": {"text": "鸡肉粉、鱼肉粉、维生素D...", "confidence": 0.95},
+                    "data": {"text": "鸡肉粉、鱼肉粉、维生素D...", "length": 100},
                 }
             },
         ),
@@ -58,8 +123,10 @@ def ocr_recognize(request):
     OCR 识别接口（使用阿里云高精版OCR）
 
     POST /api/ocr/recognize/
-    Body: multipart/form-data
-        - image: 图片文件
+
+    支持两种上传方式:
+    1. multipart/form-data: image 字段为图片文件
+    2. application/json: image 字段为 base64 编码
     """
     try:
         # 检查配置
@@ -68,17 +135,20 @@ def ocr_recognize(request):
                 message="OCR 服务未配置", code="service_not_configured", status=503
             )
 
-        # 检查文件
-        if "image" not in request.FILES:
-            return validation_error_response({"image": "请上传图片文件"})
+        # 提取图片数据
+        image_bytes, content_type, error_msg = extract_image_from_request(request)
 
-        image_file = request.FILES["image"]
+        if error_msg:
+            return validation_error_response({"image": error_msg})
 
-        # 读取图片数据
-        image_bytes = image_file.read()
-        content_type = image_file.content_type
+        if not image_bytes:
+            return validation_error_response(
+                {"image": "请上传图片文件或提供 base64 编码的图片"}
+            )
 
-        logger.info(f"OCR 识别图片: {image_file.name}, size={len(image_bytes)}")
+        logger.info(
+            f"OCR 识别: content_type={content_type}, size={len(image_bytes)} bytes"
+        )
 
         # 调用服务层
         success, text, error = ocr_service.recognize(image_bytes, content_type)
