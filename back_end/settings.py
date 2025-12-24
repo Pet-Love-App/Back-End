@@ -108,6 +108,15 @@ SWAGGER_SETTINGS = {
     "USE_SESSION_AUTH": False,
     "JSON_EDITOR": True,
     "SUPPORTED_SUBMIT_METHODS": ["get", "post", "put", "delete", "patch"],
+    "VALIDATOR_URL": None,  # 禁用在线验证器
+    "OPERATIONS_SORTER": "alpha",
+    "TAGS_SORTER": "alpha",
+    "DOC_EXPANSION": "list",
+    "DEEP_LINKING": True,
+    "PERSIST_AUTH": True,
+    # 强制使用 HTTPS（与 urls.py 中的 HTTPSSchemaGenerator 配合使用）
+    "DEFAULT_API_URL": "https://teentime.cloud/api",
+    "DEFAULT_PROTOCOL": "https",
 }
 
 # 速率限制配置
@@ -212,6 +221,11 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 # 文件上传限制
 DATA_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
 FILE_UPLOAD_MAX_MEMORY_SIZE = 5242880  # 5MB
+
+# 告诉 Django 信任 Nginx 传递的 HTTPS 头
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
+USE_X_FORWARDED_PORT = True
 
 # 生产环境安全设置
 if not DEBUG:
