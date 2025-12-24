@@ -74,11 +74,13 @@ MIDDLEWARE = [
     "middleware.supabase_auth.SupabaseAuthMiddleware",  # Supabase 认证中间件
 ]
 
-# CORS 配置
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:8081",  # Expo 默认端口
-    "http://localhost:19006",  # Expo web
-]
+# CORS 配置（允许所有来源，包括 Swagger UI）
+CORS_ALLOW_ALL_ORIGINS = True  # 允许所有来源
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:8081",  # Expo 默认端口
+#     "http://localhost:19006",  # Expo web
+#     "https://teentime.cloud",  # 生产域名
+# ]
 
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
@@ -225,10 +227,4 @@ if not DEBUG:
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
-# CORS 配置
-CORS_ALLOW_ALL_ORIGINS = True  # 允许所有来源
-# CORS_ALLOWED_ORIGINS = [
-#     "http://localhost:3000",
-#     "http://127.0.0.1:3000",
-#     "http://your-frontend-domain.com",
-# ]
+# CORS 配置已在上方设置
