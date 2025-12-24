@@ -1,4 +1,4 @@
-# Docker Compose for Pet Love Backend (Supabase)
+# Docker Compose for Pet Love Backend (腾讯云 SSL 证书)
 services:
   web:
     build:
@@ -11,7 +11,6 @@ services:
       - ./staticfiles:/app/staticfiles
       - ./media:/app/media
       - ./logs:/app/logs
-    # 不对外暴露端口，只通过 Docker Nginx 访问
     expose:
       - "8000"
     env_file:
@@ -28,8 +27,10 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro # 腾讯云证书目录
       - ./staticfiles:/app/staticfiles:ro
       - ./media:/app/media:ro
     depends_on:
