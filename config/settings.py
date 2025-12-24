@@ -9,7 +9,14 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # 默认允许的主机列表，供默认值和解析兜底使用
-DEFAULT_ALLOWED_HOSTS = ["82.157.255.92", "localhost", "127.0.0.1", "*"]
+DEFAULT_ALLOWED_HOSTS = [
+    "teentime.cloud",  # 生产域名
+    "api.teentime.cloud",  # API 子域名
+    "82.157.255.92",  # 服务器 IP
+    "localhost",
+    "127.0.0.1",
+    "*",
+]
 
 
 class Settings(BaseSettings):
